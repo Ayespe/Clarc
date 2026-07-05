@@ -447,6 +447,14 @@ final class AppState {
         streamState(in: window).isStreaming
     }
 
+    /// Whether the stream identified by `key` owns the foreground window — i.e. the
+    /// user is currently viewing that session. A stream detached to the background
+    /// (the user switched projects or started a new chat, clearing currentSessionId)
+    /// does NOT own the foreground and must not mutate `window` state.
+    func isForegroundStream(_ key: String, in window: WindowState) -> Bool {
+        window.currentSessionId == key
+    }
+
     func isThinking(in window: WindowState) -> Bool {
         streamState(in: window).isThinking
     }
@@ -1214,12 +1222,15 @@ final class AppState {
                                 sessionStates[sid] = state
                             }
                             lastCommittedReloadKey.removeValue(forKey: oldKey)
+                            migrateDraftState(from: oldKey, to: sid, in: window)
                             sessionKey = sid
                             startFlushTimer(for: sid)
 
-                            // If this is the foreground session, also update window.currentSessionId
-                            let isFg = (window.currentSessionId ?? window.newSessionKey) == oldKey || window.currentSessionId == nil
-                            if isFg { window.currentSessionId = sid }
+                            // If this is the foreground session, also update window.currentSessionId.
+                            // A stream detached to the background (user switched projects or
+                            // started a new chat) must NOT hijack the window here — otherwise the
+                            // old session's messages bleed into whatever the window now shows.
+                            if isForegroundStream(oldKey, in: window) { window.currentSessionId = sid }
                         }
 
                         let expectedPlaceholder = "pending-\(streamId.uuidString)"
@@ -1314,12 +1325,21 @@ final class AppState {
                             sessionStates[resultEvent.sessionId] = state
                         }
                         lastCommittedReloadKey.removeValue(forKey: sessionKey)
+                        migrateDraftState(from: sessionKey, to: resultEvent.sessionId, in: window)
                         sessionKey = resultEvent.sessionId
                     }
 
                     finalizeStreamSession(for: sessionKey) { state in
                         if let cost = resultEvent.totalCostUsd { state.costUsd = cost }
-                        if let duration = resultEvent.durationMs { state.durationMs += duration }
+                        // Prefer the CLI-reported duration, but fall back to wall-clock
+                        // when the result event omits duration_ms (or reports 0). Without
+                        // this the cumulative session time stays 0 and persists as 0,
+                        // even though per-message durations (also wall-clock) show fine.
+                        if let duration = resultEvent.durationMs, duration > 0 {
+                            state.durationMs += duration
+                        } else if let start = state.streamingStartDate {
+                            state.durationMs += Date().timeIntervalSince(start) * 1000
+                        }
                         if let turns = resultEvent.totalTurns { state.turns += turns }
                         if let usage = resultEvent.usage {
                             state.inputTokens += usage.inputTokens
@@ -1332,7 +1352,7 @@ final class AppState {
                     // Promote in-flight tail into committed before disk reload
                     promoteTailToCommitted(for: resultEvent.sessionId)
 
-                    let isFg = (window.currentSessionId ?? window.newSessionKey) == sessionKey
+                    let isFg = isForegroundStream(sessionKey, in: window)
                     if isFg {
                         window.currentSessionId = resultEvent.sessionId
                         if resultEvent.isError {
@@ -1387,7 +1407,7 @@ final class AppState {
 
                 case .rateLimitEvent(let info):
                     logger.warning("[Stream:UI] event #\(eventCount) .rateLimitEvent (retrySec=\(info.retrySec ?? 0))")
-                    if (window.currentSessionId ?? window.newSessionKey) == sessionKey,
+                    if isForegroundStream(sessionKey, in: window),
                        let retry = info.retrySec, retry > 0 {
                         addErrorMessage("Rate limited. Retrying in \(Int(retry))s...", in: window)
                     }
@@ -1409,14 +1429,17 @@ final class AppState {
 
             if eventCount == 0 {
                 // User cancellation revokes activeStreamId or cancels the task — distinguish
-                // that from a real "CLI died with no output" failure.
+                // that from a real "CLI died with no output" failure. Only surface the error
+                // bubble when this stream still owns the foreground window: a stream detached
+                // to the background (user switched projects) must not bleed an error into
+                // whatever session the window now shows.
                 let wasCancelled = Task.isCancelled || stateForSession(sessionKey).activeStreamId != streamId
-                if !wasCancelled {
+                if !wasCancelled && isForegroundStream(sessionKey, in: window) {
                     let errorMsg = stderrOutput ?? "No response received"
                     addErrorMessage(errorMsg, in: window)
                     logger.error("[Stream:UI] no events received — appending error bubble. stderr=\(stderrOutput ?? "nil")")
                 } else {
-                    logger.debug("[Stream:UI] no events received — suppressed (cancelled). stderr=\(stderrOutput ?? "nil")")
+                    logger.debug("[Stream:UI] no events received — suppressed (cancelled or backgrounded). stderr=\(stderrOutput ?? "nil")")
                 }
             }
 
@@ -2034,6 +2057,16 @@ final class AppState {
     func loadSessionHistory(in window: WindowState) async {
         guard let project = window.selectedProject else { return }
         await reloadSessionSummaries(for: project)
+
+        // Restore the last-used session when entering a project in new-chat state
+        // so the status bar shows persisted stats immediately. No didSwitchToSession
+        // here — the project's lastSessionId already points at this session, so
+        // persisting it again would be a redundant projects-array write.
+        if window.currentSessionId == nil,
+           let lastId = project.lastSessionId,
+           let summary = allSessionSummaries.first(where: { $0.id == lastId && $0.projectId == project.id }) {
+            switchToSession(summary.makeSession(), in: window)
+        }
     }
 
     /// Window-independent reload — used by the FS watcher when the CLI (or
@@ -2063,6 +2096,12 @@ final class AppState {
             merged.model = mem.model
             merged.effort = mem.effort
             merged.permissionMode = mem.permissionMode
+            // Status-bar stats are written eagerly to allSessionSummaries (in
+            // releaseOutgoingSession) before the async disk save completes. A
+            // watcher reload that races that save would overwrite the in-memory
+            // value with stale disk data. Prefer the larger/set in-memory value.
+            merged.totalDurationMs = [mem.totalDurationMs, merged.totalDurationMs].compactMap { $0 }.max()
+            merged.contextPercent = mem.contextPercent ?? merged.contextPercent
             return merged
         }
 
@@ -2202,6 +2241,21 @@ final class AppState {
               !(sessionStates[outgoingId]?.isStreaming ?? false) else { return }
         let outgoingState = sessionStates[outgoingId]
         let outgoingMessages = outgoingState?.allMessages ?? []
+
+        // Eagerly update the in-memory summary so navigating back to this session
+        // before the async save completes still shows the correct stats.
+        if let state = outgoingState,
+           let idx = allSessionSummaries.firstIndex(where: { $0.id == outgoingId }) {
+            var s = allSessionSummaries[idx]
+            if state.durationMs > 0 {
+                s.totalDurationMs = [state.durationMs, s.totalDurationMs].compactMap { $0 }.max()
+            }
+            if let pct = state.lastTurnContextUsedPercentage {
+                s.contextPercent = pct
+            }
+            allSessionSummaries[idx] = s
+        }
+
         Task { [weak self] in
             guard let self else { return }
             if !outgoingMessages.isEmpty, let project = window.selectedProject {
@@ -2725,6 +2779,22 @@ final class AppState {
         let key = window.currentSessionId ?? "new"
         if window.messageQueue.isEmpty { window.draftQueues.removeValue(forKey: key) }
         else { window.draftQueues[key] = window.messageQueue }
+    }
+
+    /// Move persisted draft state (message queue, input draft) when a stream's key
+    /// changes from a pending/temp id to the real CLI session id. Queued messages
+    /// saved under the old key would otherwise be orphaned — invisible when the user
+    /// returns to the session and skipped by background queue processing. The live
+    /// foreground queue lives in `window.messageQueue`, so only `draftQueues` and
+    /// `draftTexts` need to follow the key.
+    private func migrateDraftState(from old: String, to new: String, in window: WindowState) {
+        guard old != new else { return }
+        if let queue = window.draftQueues.removeValue(forKey: old) {
+            window.draftQueues[new] = queue
+        }
+        if let text = window.draftTexts.removeValue(forKey: old) {
+            window.draftTexts[new] = text
+        }
     }
 
     /// Sends the next queued message for a background session (one the window is not currently displaying).
