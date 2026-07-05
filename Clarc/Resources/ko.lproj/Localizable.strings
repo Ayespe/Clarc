@@ -207,7 +207,8 @@
 
 // MARK: - Model Descriptions
 "model.desc.default" = "계정 유형에 따른 권장 모델로 되돌림";
-"model.desc.best" = "현재 사용 가능한 가장 강력한 모델 (현재 Opus와 동일)";
+"model.desc.best" = "Fable 5 사용이 가능하면 Fable 5, 아니면 최신 Opus 모델";
+"model.desc.fable" = "가장 어렵고 오래 걸리는 작업을 위한 Claude Fable 5";
 "model.desc.opus" = "복잡한 추론 작업을 위한 최신 Opus 모델";
 "model.desc.opus1m" = "긴 세션을 위한 100만 토큰 컨텍스트 윈도우 Opus";
 "model.desc.opusplan" = "Plan Mode에서 Opus 사용 후 실행 시 Sonnet으로 전환";
@@ -226,8 +227,8 @@
 "effort.desc.auto" = "활성 모델과 플랜에 따라 자동으로 결정되는 모델 기본값을 사용합니다.";
 "effort.desc.low" = "지연 시간에 민감하고 복잡하지 않은 짧고 범위가 명확한 작업에 사용하세요.";
 "effort.desc.medium" = "일부 정확도를 양보하더라도 토큰 비용을 줄이고 싶을 때 적합합니다.";
-"effort.desc.high" = "토큰 사용량과 지능 수준을 균형 있게 유지합니다. 정확도가 중요한 작업의 최소 권장 수준입니다.";
-"effort.desc.xhigh" = "대부분의 코딩 및 에이전트 작업에서 최상의 결과를 제공합니다. Opus 4.7의 권장 기본값입니다.";
+"effort.desc.high" = "토큰 사용량과 지능 수준을 균형 있게 유지합니다. 대부분의 최신 모델에서 기본값입니다.";
+"effort.desc.xhigh" = "더 많은 토큰을 사용해 더 깊은 추론을 제공합니다. Opus 4.7의 기본값입니다.";
 "effort.desc.max" = "토큰 제한 없이 가장 깊은 추론을 제공합니다. 현재 세션에만 적용됩니다. 복잡하고 까다로운 작업에 적합합니다.";
 
 // MARK: - AppState

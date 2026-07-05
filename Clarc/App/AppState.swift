@@ -150,12 +150,13 @@ final class AppState {
 
     // MARK: - Model
 
-    static let availableModels = ["default", "best", "opus", "opus[1m]", "opusplan", "sonnet", "sonnet[1m]", "haiku"]
+    static let availableModels = ["default", "best", "fable", "opus", "opus[1m]", "opusplan", "sonnet", "sonnet[1m]", "haiku"]
 
     static func modelDisplayName(_ model: String) -> String {
         switch model {
         case "default": return "Default"
         case "best": return "Best"
+        case "fable": return "Fable"
         case "opus": return "Opus"
         case "opus[1m]": return "Opus 1M"
         case "opusplan": return "Opus Plan"
@@ -171,6 +172,7 @@ final class AppState {
         switch model {
         case "default":   key = "model.desc.default"
         case "best":      key = "model.desc.best"
+        case "fable":     key = "model.desc.fable"
         case "opus":      key = "model.desc.opus"
         case "opus[1m]":  key = "model.desc.opus1m"
         case "opusplan":  key = "model.desc.opusplan"
@@ -182,6 +184,12 @@ final class AppState {
         return NSLocalizedString(key, comment: "")
     }
     static let availableEfforts = ["low", "medium", "high", "xhigh", "max"]
+
+    /// Efforts selectable per session (chat toolbar and /effort picker). "ultracode" is a
+    /// Claude Code setting rather than a model effort level — delivered via --settings
+    /// instead of --effort (see ClaudeService.buildArguments) — so it is session-only
+    /// and excluded from the default-effort setting.
+    static let availableSessionEfforts = availableEfforts + ["ultracode"]
 
     static func permissionModeDescription(_ mode: PermissionMode) -> String {
         let key: String
@@ -338,7 +346,8 @@ final class AppState {
     static func formatModelId(_ raw: String) -> String {
         let lower = raw.lowercased()
         let family: String
-        if lower.contains("opus") { family = "Opus" }
+        if lower.contains("fable") { family = "Fable" }
+        else if lower.contains("opus") { family = "Opus" }
         else if lower.contains("sonnet") { family = "Sonnet" }
         else if lower.contains("haiku") { family = "Haiku" }
         else { return raw }
@@ -814,7 +823,7 @@ final class AppState {
         case "effort":
             if parts.count > 1 {
                 let arg = String(parts[1]).trimmingCharacters(in: .whitespaces).lowercased()
-                setSessionEffort(Self.availableEfforts.contains(arg) ? arg : nil, in: window)
+                setSessionEffort(Self.availableSessionEfforts.contains(arg) ? arg : nil, in: window)
             } else {
                 window.showEffortPicker = true
             }
@@ -982,11 +991,15 @@ final class AppState {
         await permission.refreshRunToken()
 
         let currentPermissionMode = window.sessionPermissionMode ?? permissionMode
+        let currentEffort = window.sessionEffort ?? (selectedEffort == "auto" ? nil : selectedEffort)
         // Always register a hook file — even in bypassPermissions mode, AskUserQuestion
         // needs the hook to deliver the user's answer. The matcher narrows accordingly.
         var hookSettingsPath: String?
         do {
-            hookSettingsPath = try await permission.writeHookSettingsFile(permissionMode: currentPermissionMode)
+            hookSettingsPath = try await permission.writeHookSettingsFile(
+                permissionMode: currentPermissionMode,
+                ultracode: currentEffort == "ultracode"
+            )
         } catch {
             logger.error("Failed to write hook settings: \(error.localizedDescription)")
         }
@@ -1013,7 +1026,7 @@ final class AppState {
                 cliSessionId: cliSessionId,
                 internalSessionKey: sessionKey,
                 model: window.sessionModel ?? self.selectedModel,
-                effort: window.sessionEffort ?? (self.selectedEffort == "auto" ? nil : self.selectedEffort),
+                effort: currentEffort,
                 hookSettingsPath: hookSettingsPath,
                 permissionMode: currentPermissionMode,
                 projectId: project.id,
@@ -2744,15 +2757,15 @@ final class AppState {
         await permission.refreshRunToken()
 
         let currentPermissionMode = sessionStates[sessionKey]?.permissionMode ?? permissionMode
+        let effort = sessionStates[sessionKey]?.effort ?? (selectedEffort == "auto" ? nil : selectedEffort)
         // Always register the hook file: bypassPermissions still needs it for AskUserQuestion.
         var hookSettingsPath: String?
-        do { hookSettingsPath = try await permission.writeHookSettingsFile(permissionMode: currentPermissionMode) }
+        do { hookSettingsPath = try await permission.writeHookSettingsFile(permissionMode: currentPermissionMode, ultracode: effort == "ultracode") }
         catch { logger.error("Failed to write hook settings for background queue: \(error.localizedDescription)") }
 
         await permission.registerSession(sid: sessionKey, projectKey: cwd, mode: currentPermissionMode)
 
         let model = sessionStates[sessionKey]?.model ?? selectedModel
-        let effort = sessionStates[sessionKey]?.effort ?? (selectedEffort == "auto" ? nil : selectedEffort)
         let task = Task { [weak self, window] in
             guard let self else { return }
             await self.processStream(

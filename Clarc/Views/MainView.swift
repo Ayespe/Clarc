@@ -698,6 +698,7 @@ private func effortDisplayName(_ effort: String) -> String {
     case "high": return "High"
     case "xhigh": return "XHigh"
     case "max": return "Max"
+    case "ultracode": return "Ultracode"
     default: return effort.capitalized
     }
 }
@@ -777,7 +778,7 @@ struct ChatToolbarControls: View {
                         if windowState.sessionEffort == nil { Image(systemName: "checkmark") }
                     }
                     Divider()
-                    ForEach(AppState.availableEfforts, id: \.self) { effort in
+                    ForEach(AppState.availableSessionEfforts, id: \.self) { effort in
                         Button {
                             appState.setSessionEffort(effort, in: windowState)
                         } label: {
@@ -985,8 +986,8 @@ struct EffortPickerSheet: View {
     @State private var selectedIndex: Int = 0
     @FocusState private var isFocused: Bool
 
-    // 0 = Auto (nil), 1...n = availableEfforts
-    private let items: [String?] = [nil] + AppState.availableEfforts.map { Optional($0) }
+    // 0 = Auto (nil), 1...n = availableSessionEfforts
+    private let items: [String?] = [nil] + AppState.availableSessionEfforts.map { Optional($0) }
 
     private var effectiveEffort: String? { windowState.sessionEffort }
 
@@ -1004,7 +1005,11 @@ struct EffortPickerSheet: View {
                             Text(effort.map { effortDisplayName($0) } ?? "Auto")
                                 .foregroundStyle(ClaudeTheme.textPrimary)
                             if effort == "max" {
-                                Text("Opus 4.6 only")
+                                Text("Current session only")
+                                    .font(.caption2)
+                                    .foregroundStyle(ClaudeTheme.textTertiary)
+                            } else if effort == "ultracode" {
+                                Text("Multi-agent workflows with xhigh reasoning")
                                     .font(.caption2)
                                     .foregroundStyle(ClaudeTheme.textTertiary)
                             }

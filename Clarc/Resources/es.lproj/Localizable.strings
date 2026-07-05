@@ -207,7 +207,8 @@
 
 // MARK: - Model Descriptions
 "model.desc.default" = "Vuelve al modelo recomendado según tu tipo de cuenta";
-"model.desc.best" = "El modelo más potente disponible actualmente (equivale a Opus por ahora)";
+"model.desc.best" = "Usa Fable 5 cuando está disponible; de lo contrario, el último modelo Opus";
+"model.desc.fable" = "Claude Fable 5 para las tareas más difíciles y de mayor duración";
 "model.desc.opus" = "El último modelo Opus para tareas de razonamiento complejo";
 "model.desc.opus1m" = "Opus con ventana de contexto de 1 millón de tokens para sesiones largas";
 "model.desc.opusplan" = "Usa Opus en el modo plan y cambia a Sonnet al ejecutar";
@@ -226,8 +227,8 @@
 "effort.desc.auto" = "Usa el nivel de esfuerzo predeterminado del modelo, elegido automáticamente según el modelo y el plan activos.";
 "effort.desc.low" = "Resérvalo para tareas cortas, acotadas y sensibles a la latencia que no requieran mucha inteligencia.";
 "effort.desc.medium" = "Reduce el uso de tokens en trabajos sensibles al costo que pueden sacrificar algo de inteligencia.";
-"effort.desc.high" = "Equilibra el uso de tokens y la inteligencia. Buen mínimo para el trabajo que requiere precisión.";
-"effort.desc.xhigh" = "Los mejores resultados para la mayoría de las tareas de programación y agénticas. Valor predeterminado recomendado en Opus 4.7.";
+"effort.desc.high" = "Equilibra el uso de tokens y la inteligencia. Valor predeterminado en la mayoría de los modelos actuales.";
+"effort.desc.xhigh" = "Razonamiento más profundo con mayor consumo de tokens. Valor predeterminado en Opus 4.7.";
 "effort.desc.max" = "El razonamiento más profundo sin límite de tokens. Solo para la sesión actual. Ideal para tareas exigentes y complejas.";
 
 // MARK: - AppState

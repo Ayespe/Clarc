@@ -267,12 +267,12 @@ actor PermissionServer {
     /// the CLI emits a fallback "Answer questions?" error result and pushes on. So we
     /// always register a hook; the matcher just narrows to AskUserQuestion-only when
     /// permissions are bypassed.
-    func generateHookSettings(permissionMode: PermissionMode) -> String {
+    func generateHookSettings(permissionMode: PermissionMode, ultracode: Bool = false) -> String {
         let url = "http://127.0.0.1:\(port)/hook/pre-tool-use/\(appSecret)/\(runToken)"
         let matcher: String = permissionMode.skipsHookPipeline
             ? "^AskUserQuestion$"
             : "^(Bash|Edit|Write|MultiEdit|AskUserQuestion|mcp__.*)$"
-        let settings: [String: Any] = [
+        var settings: [String: Any] = [
             "hooks": [
                 "PreToolUse": [
                     [
@@ -288,6 +288,11 @@ actor PermissionServer {
                 ]
             ]
         ]
+        // Ultracode is a Claude Code setting, not an effort level. The CLI takes a single
+        // --settings flag, so it rides in the same file as the hook configuration.
+        if ultracode {
+            settings["ultracode"] = true
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]),
               let json = String(data: data, encoding: .utf8) else {
             return "{}"
@@ -296,8 +301,8 @@ actor PermissionServer {
     }
 
     /// Write hook settings to a temporary file and return its path.
-    func writeHookSettingsFile(permissionMode: PermissionMode) throws -> String {
-        let json = generateHookSettings(permissionMode: permissionMode)
+    func writeHookSettingsFile(permissionMode: PermissionMode, ultracode: Bool = false) throws -> String {
+        let json = generateHookSettings(permissionMode: permissionMode, ultracode: ultracode)
         let tempDir = FileManager.default.temporaryDirectory
         let filePath = tempDir.appendingPathComponent("claudework-hooks-\(UUID().uuidString).json")
         try json.write(to: filePath, atomically: true, encoding: .utf8)

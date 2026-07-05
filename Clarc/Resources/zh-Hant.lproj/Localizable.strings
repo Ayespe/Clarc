@@ -207,7 +207,8 @@
 
 // MARK: - Model Descriptions
 "model.desc.default" = "還原為適合你帳戶類型的建議模型";
-"model.desc.best" = "目前可用的最強模型（目前等同於 Opus）";
+"model.desc.best" = "可用時使用 Fable 5，否則使用最新的 Opus 模型";
+"model.desc.fable" = "適用於最困難、耗時最長任務的 Claude Fable 5";
 "model.desc.opus" = "適用於複雜推理任務的最新 Opus 模型";
 "model.desc.opus1m" = "適用於長會話、具有 100 萬 token 上下文視窗的 Opus";
 "model.desc.opusplan" = "在計畫模式中使用 Opus，執行時切換為 Sonnet";
@@ -226,8 +227,8 @@
 "effort.desc.auto" = "使用根據目前模型和方案自動決定的模型預設等級。";
 "effort.desc.low" = "適用於對延遲敏感、範圍明確且不複雜的短任務。";
 "effort.desc.medium" = "適合在願意犧牲部分準確度的情況下降低 token 成本。";
-"effort.desc.high" = "在 token 用量與智慧水準之間取得平衡。是對準確度有要求的任務的最低建議等級。";
-"effort.desc.xhigh" = "在大多數編碼和代理任務中提供最佳結果。是 Opus 4.7 的建議預設值。";
+"effort.desc.high" = "在 token 用量與智慧水準之間取得平衡。是大多數最新模型的預設值。";
+"effort.desc.xhigh" = "以更高的 token 消耗提供更深入的推理。是 Opus 4.7 的預設值。";
 "effort.desc.max" = "在無 token 限制下提供最深入的推理。僅對目前會話生效。適合複雜、棘手的任務。";
 
 // MARK: - AppState

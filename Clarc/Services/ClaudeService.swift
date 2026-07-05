@@ -450,7 +450,9 @@ actor ClaudeService {
             args += ["--model", model]
         }
 
-        if let effort {
+        // "ultracode" is not a valid --effort value; it is delivered as a Claude Code
+        // setting inside the hook settings file (see PermissionServer.generateHookSettings).
+        if let effort, effort != "ultracode" {
             args += ["--effort", effort]
         }
 

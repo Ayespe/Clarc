@@ -207,7 +207,8 @@
 
 // MARK: - Model Descriptions
 "model.desc.default" = "アカウントタイプに応じた推奨モデルに戻します";
-"model.desc.best" = "現在利用可能な最も高性能なモデル（現在は Opus と同等）";
+"model.desc.best" = "Fable 5 が利用可能な場合は Fable 5、それ以外は最新の Opus モデル";
+"model.desc.fable" = "最も困難で長時間のタスク向けの Claude Fable 5";
 "model.desc.opus" = "複雑な推論タスク向けの最新 Opus モデル";
 "model.desc.opus1m" = "長いセッション向けの 100 万トークンコンテキストウィンドウの Opus";
 "model.desc.opusplan" = "Plan Mode では Opus を使用し、実行時に Sonnet へ切り替え";
@@ -226,8 +227,8 @@
 "effort.desc.auto" = "アクティブなモデルとプランに応じて自動的に決定されるモデルのデフォルト値を使用します。";
 "effort.desc.low" = "レイテンシに敏感で複雑でない、短く範囲が明確なタスクに使用してください。";
 "effort.desc.medium" = "多少の精度を犠牲にしてでもトークンコストを抑えたい場合に適しています。";
-"effort.desc.high" = "トークン使用量と知能のバランスを保ちます。精度が重要なタスクの最低推奨レベルです。";
-"effort.desc.xhigh" = "ほとんどのコーディングおよびエージェントタスクで最良の結果をもたらします。Opus 4.7 の推奨デフォルトです。";
+"effort.desc.high" = "トークン使用量と知能のバランスを保ちます。ほとんどの最新モデルのデフォルトです。";
+"effort.desc.xhigh" = "より多くのトークンを消費してより深い推論を行います。Opus 4.7 のデフォルトです。";
 "effort.desc.max" = "トークン制限なしで最も深い推論を提供します。現在のセッションにのみ適用されます。複雑で難易度の高いタスクに適しています。";
 
 // MARK: - AppState

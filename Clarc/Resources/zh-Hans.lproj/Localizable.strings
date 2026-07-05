@@ -207,7 +207,8 @@
 
 // MARK: - Model Descriptions
 "model.desc.default" = "恢复为适合你账户类型的推荐模型";
-"model.desc.best" = "当前可用的最强模型（目前等同于 Opus）";
+"model.desc.best" = "可用时使用 Fable 5，否则使用最新的 Opus 模型";
+"model.desc.fable" = "适用于最困难、耗时最长任务的 Claude Fable 5";
 "model.desc.opus" = "适用于复杂推理任务的最新 Opus 模型";
 "model.desc.opus1m" = "适用于长会话、具有 100 万令牌上下文窗口的 Opus";
 "model.desc.opusplan" = "在计划模式中使用 Opus，执行时切换为 Sonnet";
@@ -226,8 +227,8 @@
 "effort.desc.auto" = "使用根据当前模型和套餐自动决定的模型默认级别。";
 "effort.desc.low" = "适用于对延迟敏感、范围明确且不复杂的短任务。";
 "effort.desc.medium" = "适合在愿意牺牲部分准确度的情况下降低令牌成本。";
-"effort.desc.high" = "在令牌用量与智能水平之间取得平衡。是对准确度有要求的任务的最低推荐级别。";
-"effort.desc.xhigh" = "在大多数编码和智能体任务中提供最佳结果。是 Opus 4.7 的推荐默认值。";
+"effort.desc.high" = "在令牌用量与智能水平之间取得平衡。是大多数最新模型的默认值。";
+"effort.desc.xhigh" = "以更高的令牌消耗提供更深入的推理。是 Opus 4.7 的默认值。";
 "effort.desc.max" = "在无令牌限制下提供最深入的推理。仅对当前会话生效。适合复杂、棘手的任务。";
 
 // MARK: - AppState
