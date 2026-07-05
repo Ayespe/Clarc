@@ -549,5 +549,28 @@
         type="application/octet-stream"
         sparkle:edSignature="4v12b/337Ejwo779/ztzJVpZheNEQ1pgd6T5khR1qzSqMn4Qso1L05hHj7IF1FpZkuVwPnH2bHtLVAZCsd4dBg==" />
     </item>
+    <item>
+      <title>Clarc v1.4.0</title>
+      <sparkle:version>38</sparkle:version>
+      <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Sun, 05 Jul 2026 23:43:24 +0000</pubDate>
+      <description><![CDATA[
+<h3>Added</h3>
+<ul>
+  <li>Model picker now offers the new <strong>Fable 5</strong> model (the <code>fable</code> alias), and the <code>best</code> alias resolves to Fable 5 where available. Raw model IDs like <code>claude-fable-5</code> render as "Fable 5".</li>
+  <li>Chat effort pickers gain a session-only <strong>Ultracode</strong> option, available from the toolbar menu, the <code>/effort</code> sheet, and the <code>/effort</code> command.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+  <li>Effort level descriptions now match the latest Claude Code: <code>high</code> is the default on current models, and <code>xhigh</code> offers deeper reasoning. The outdated <code>max</code> effort note ("Opus 4.6 only") has been corrected — <code>max</code> is session-only on all effort-capable models.</li>
+</ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/ttnear/Clarc/releases/download/v1.4.0/Clarc-1.4.0.zip"
+        length="6518691"
+        type="application/octet-stream"
+        sparkle:edSignature="1mk2GMeHCf49q0H0QuwSTuxGRURZh3of3beX126f+RRs0t+qrrTE3BJXdeJdJF3Am1OC3IY+EO9wVuI/kwrNDg==" />
+    </item>
   </channel>
 </rss>
