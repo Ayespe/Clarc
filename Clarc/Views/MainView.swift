@@ -56,6 +56,12 @@ struct MainView: View {
                     }
                     .keyboardShortcut("3", modifiers: .command)
                     .hidden()
+
+                    Button("") {
+                        windowState.showQuickSwitcher = true
+                    }
+                    .keyboardShortcut("k", modifiers: [.command, .shift])
+                    .hidden()
                 }
                 .overlay {
                     if windowState.showMarketplace {
@@ -248,9 +254,6 @@ struct MainView: View {
         }
         .focusedValue(\.startNewChat) {
             appState.startNewChat(in: windowState)
-        }
-        .focusedValue(\.openQuickSwitcher) {
-            windowState.showQuickSwitcher = true
         }
         // Toolbar is in an isolated struct so NSToolbar does not re-layout on project switches.
         .background {

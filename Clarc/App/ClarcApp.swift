@@ -8,20 +8,10 @@ private struct StartNewChatKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
-private struct OpenQuickSwitcherKey: FocusedValueKey {
-    typealias Value = () -> Void
-}
-
 extension FocusedValues {
     var startNewChat: (() -> Void)? {
         get { self[StartNewChatKey.self] }
         set { self[StartNewChatKey.self] = newValue }
-    }
-
-
-    var openQuickSwitcher: (() -> Void)? {
-        get { self[OpenQuickSwitcherKey.self] }
-        set { self[OpenQuickSwitcherKey.self] = newValue }
     }
 }
 
@@ -38,7 +28,6 @@ struct ProjectWindowValue: Codable, Hashable {
 struct ClarcApp: App {
     @State private var appState = AppState()
     @FocusedValue(\.startNewChat) private var startNewChat
-    @FocusedValue(\.openQuickSwitcher) private var openQuickSwitcher
 
     var body: some Scene {
         WindowGroup {
@@ -53,12 +42,6 @@ struct ClarcApp: App {
                     startNewChat?()
                 }
                 .keyboardShortcut("n", modifiers: .command)
-            }
-            CommandMenu("Navigate") {
-                Button("Open Quick Switcher") {
-                    openQuickSwitcher?()
-                }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
             }
             CommandMenu("Theme") {
                 ForEach(AppTheme.allCases) { theme in

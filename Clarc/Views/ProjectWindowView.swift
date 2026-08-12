@@ -62,6 +62,12 @@ struct ProjectWindowView: View {
             }
             .keyboardShortcut("3", modifiers: .command)
             .hidden()
+
+            Button("") {
+                windowState.showQuickSwitcher = true
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
+            .hidden()
         }
         .overlay {
             if windowState.showQuickSwitcher {
@@ -182,9 +188,6 @@ struct ProjectWindowView: View {
         }
         .focusedValue(\.startNewChat) {
             appState.startNewChat(in: windowState)
-        }
-        .focusedValue(\.openQuickSwitcher) {
-            windowState.showQuickSwitcher = true
         }
     }
 
