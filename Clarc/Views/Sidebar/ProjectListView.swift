@@ -120,7 +120,7 @@ struct ProjectListView: View {
         List {
             ForEach(sortedProjects) { project in
                 projectHeader(project)
-                    .listRowBackground(projectBackground(project))
+                    .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
 
                 if expandedProjectIds.contains(project.id) {
@@ -171,9 +171,7 @@ struct ProjectListView: View {
 
                 Image(systemName: "folder.fill")
                     .font(.system(size: ClaudeTheme.size(12)))
-                    .foregroundStyle(windowState.selectedProject?.id == project.id
-                        ? ClaudeTheme.accent
-                        : ClaudeTheme.textSecondary)
+                    .foregroundStyle(ClaudeTheme.textSecondary)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(project.name)
@@ -310,15 +308,6 @@ struct ProjectListView: View {
         .foregroundStyle(ClaudeTheme.accent)
         .padding(.leading, 55)
         .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func projectBackground(_ project: Project) -> some View {
-        if windowState.selectedProject?.id == project.id {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(ClaudeTheme.sidebarItemSelected)
-                .padding(.horizontal, 8)
-        }
     }
 
     @ViewBuilder

@@ -291,8 +291,8 @@ struct MessageBubble: View {
         return HStack(alignment: .bottom, spacing: 0) {
             if isStreamingTail {
                 Text(text)
-                    .font(.system(size: ClaudeTheme.messageSize(15)))
-                    .lineSpacing(4)
+                    .font(.system(size: MarkdownTypography.bodyFontSize))
+                    .lineSpacing(MarkdownTypography.bodyLineSpacing)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
@@ -301,7 +301,7 @@ struct MessageBubble: View {
             }
             if isStreamingTail {
                 Text("|")
-                    .font(.system(size: ClaudeTheme.messageSize(15), weight: .light))
+                    .font(.system(size: MarkdownTypography.bodyFontSize, weight: .light))
                     .foregroundStyle(ClaudeTheme.accent)
                     .opacity(cursorVisible ? 1 : 0)
                     .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: cursorVisible)

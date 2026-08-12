@@ -73,14 +73,14 @@ struct MarkdownDocumentParserTests {
 
     @Test("Body, list, and quote use the streaming line spacing")
     func typographyMetrics() {
-        #expect(MarkdownTypography.bodyLineSpacing == 4)
-        #expect(MarkdownTypography.listItemSpacing == 4)
-        #expect(MarkdownTypography.paragraphSpacing == 10)
-        #expect(MarkdownTypography.headingAfterSpacing == 6)
+        #expect(MarkdownTypography.bodyLineSpacing == 2)
+        #expect(MarkdownTypography.listItemSpacing == 3)
+        #expect(MarkdownTypography.paragraphSpacing == 8)
+        #expect(MarkdownTypography.headingAfterSpacing == 4)
         #expect(MarkdownTypography.spacingBefore(
             .paragraph("body"),
             previous: .heading(level: 2, content: "title")
-        ) == 6)
+        ) == 4)
     }
 
     @Test("Existing URL sanitizing behavior is retained")

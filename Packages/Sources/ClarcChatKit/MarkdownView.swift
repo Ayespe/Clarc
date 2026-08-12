@@ -47,29 +47,30 @@ enum MarkdownRenderBlock: Equatable {
 }
 
 enum MarkdownTypography {
-    static let bodyLineSpacing: CGFloat = 4
-    static let paragraphSpacing: CGFloat = 10
-    static let listItemSpacing: CGFloat = 4
-    static let listSpacing: CGFloat = 8
-    static let blockquoteSpacing: CGFloat = 10
-    static let headingAfterSpacing: CGFloat = 6
-    static let codeSpacing: CGFloat = 10
+    static var bodyFontSize: CGFloat { ClaudeTheme.messageSize(14) }
+    static let bodyLineSpacing: CGFloat = 2
+    static let paragraphSpacing: CGFloat = 8
+    static let listItemSpacing: CGFloat = 3
+    static let listSpacing: CGFloat = 6
+    static let blockquoteSpacing: CGFloat = 8
+    static let headingAfterSpacing: CGFloat = 4
+    static let codeSpacing: CGFloat = 8
 
     static func headingBeforeSpacing(level: Int) -> CGFloat {
         switch level {
-        case 1, 2: 14
-        case 3, 4: 12
-        default: 10
+        case 1, 2: 12
+        case 3, 4: 10
+        default: 8
         }
     }
 
     static func headingFontSize(level: Int) -> CGFloat {
         let base: CGFloat
         switch level {
-        case 1: base = 20
-        case 2: base = 18
-        case 3: base = 16
-        default: base = 15
+        case 1: base = 18
+        case 2: base = 16
+        case 3: base = 15
+        default: base = 14
         }
         return ClaudeTheme.messageSize(base)
     }
@@ -407,7 +408,7 @@ private struct MarkdownTextView: View {
     var body: some View {
         Text(parseInlineMarkdown(
             content,
-            fontSize: ClaudeTheme.messageSize(15)
+            fontSize: MarkdownTypography.bodyFontSize
         ))
         .lineSpacing(MarkdownTypography.bodyLineSpacing)
         .textSelection(.enabled)
@@ -424,7 +425,7 @@ private struct MarkdownUnorderedListView: View {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("•")
-                        .font(.system(size: ClaudeTheme.messageSize(15), weight: .medium))
+                        .font(.system(size: MarkdownTypography.bodyFontSize, weight: .medium))
                         .foregroundStyle(ClaudeTheme.accent)
                         .frame(width: 12, alignment: .trailing)
                     MarkdownTextView(content: item)
@@ -443,7 +444,7 @@ private struct MarkdownOrderedListView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(item.number).")
                         .font(.system(
-                            size: ClaudeTheme.messageSize(15),
+                            size: MarkdownTypography.bodyFontSize,
                             weight: .medium,
                             design: .monospaced
                         ))
@@ -462,7 +463,7 @@ private struct BlockquoteView: View {
     var body: some View {
         Text(parseInlineMarkdown(
             lines.joined(separator: "\n"),
-            fontSize: ClaudeTheme.messageSize(15)
+            fontSize: MarkdownTypography.bodyFontSize
         ))
         .foregroundStyle(ClaudeTheme.textSecondary)
         .lineSpacing(MarkdownTypography.bodyLineSpacing)
@@ -624,7 +625,7 @@ private struct MarkdownTableView: View {
     ) -> some View {
         Text(parseInlineMarkdown(
             text,
-            fontSize: ClaudeTheme.messageSize(14),
+            fontSize: ClaudeTheme.messageSize(13),
             baseWeight: isHeader ? .semibold : .regular
         ))
         .foregroundStyle(ClaudeTheme.textPrimary)
