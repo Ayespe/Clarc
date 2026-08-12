@@ -43,7 +43,7 @@ struct MarkdownDocumentParserTests {
 
     @Test("Headings, quotes, code, tables, and rules remain distinct")
     func blockTypes() {
-        let fence = String(repeating: UnicodeScalar(96), count: 3)
+        let fence = String(repeating: "`", count: 3)
         let source = """
         ## Heading
 
@@ -85,7 +85,7 @@ struct MarkdownDocumentParserTests {
 
     @Test("Existing URL sanitizing behavior is retained")
     func urlHelpers() {
-        let tick = String(UnicodeScalar(96))
+        let tick = "`"
         let broken = "[link](https://example.com/\(tick)path\(tick))"
         #expect(sanitizeMarkdownLinkURLs(broken) == "[link](https://example.com/path)")
         #expect(autoLinkURLs("See https://example.com now")
