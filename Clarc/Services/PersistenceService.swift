@@ -148,16 +148,16 @@ actor PersistenceService {
     func deleteSession(projectId: UUID, sessionId: String, origin: SessionOrigin, cwd: String?) async throws {
         switch origin {
         case .cliBacked:
-            await metaStore.delete(sessionId: sessionId)
-            if let cwd {
-                await cliStore.deleteSession(sid: sessionId, cwd: cwd)
-            } else {
-                logger.warning("Skipping CLI jsonl delete for \(sessionId, privacy: .public): cwd unavailable")
+            guard let cwd else {
+                logger.error("Cannot delete CLI jsonl \(sessionId, privacy: .public): cwd unavailable")
+                throw CocoaError(.fileNoSuchFile)
             }
-            // Pre-cli-sync builds wrote a Clarc-side json with the same sid. If
-            // it survives, the merge in AppState falls back to it after the
-            // jsonl is gone and the entry resurrects on the next reload.
+            // Remove the primary Claude Code record first. A filesystem error
+            // must leave the Clarc fallback/sidecar intact so the UI does not
+            // discard a history file that still exists on disk.
+            try await cliStore.deleteSession(sid: sessionId, cwd: cwd)
             try removeLegacySessionFile(projectId: projectId, sessionId: sessionId)
+            await metaStore.delete(sessionId: sessionId)
         case .legacyClarc:
             try removeLegacySessionFile(projectId: projectId, sessionId: sessionId)
         }

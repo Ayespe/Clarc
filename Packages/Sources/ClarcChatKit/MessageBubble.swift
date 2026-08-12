@@ -2,6 +2,60 @@ import SwiftUI
 import AppKit
 import ClarcCore
 
+/// A UI-only run of adjacent, visible thinking content. The original
+/// `MessageBlock` values remain untouched so Claude JSONL stays authoritative.
+struct ThinkingBlockGroup: Identifiable, Equatable {
+    let blocks: [MessageBlock]
+
+    var id: String { blocks.first?.id ?? "thinking-empty" }
+}
+
+/// Presentation items retain hard boundaries from the original block stream.
+/// In particular, a hidden tool remains a boundary while runs are formed, so
+/// thinking is never merged across Tool/Text content merely because that content
+/// is filtered out later.
+enum MessagePresentationItem: Identifiable, Equatable {
+    case block(MessageBlock)
+    case thinkingGroup(ThinkingBlockGroup)
+
+    var id: String {
+        switch self {
+        case .block(let block): block.id
+        case .thinkingGroup(let group): group.id
+        }
+    }
+}
+
+enum MessagePresentationBuilder {
+    /// Groups only consecutive, ordinary thinking blocks. Text, tools, mixed
+    /// blocks, and redacted thinking are all hard boundaries.
+    static func groupAdjacentThinking(in blocks: [MessageBlock]) -> [MessagePresentationItem] {
+        var result: [MessagePresentationItem] = []
+        var thinkingRun: [MessageBlock] = []
+
+        func flushThinkingRun() {
+            guard !thinkingRun.isEmpty else { return }
+            result.append(.thinkingGroup(ThinkingBlockGroup(blocks: thinkingRun)))
+            thinkingRun.removeAll(keepingCapacity: true)
+        }
+
+        for block in blocks {
+            let isOrdinaryThinking = block.thinking != nil
+                && !block.isThinkingRedacted
+                && block.text == nil
+                && block.toolCall == nil
+            if isOrdinaryThinking {
+                thinkingRun.append(block)
+            } else {
+                flushThinkingRun()
+                result.append(.block(block))
+            }
+        }
+        flushThinkingRun()
+        return result
+    }
+}
+
 struct MessageBubble: View {
     @Environment(ChatBridge.self) private var chatBridge
     let message: ChatMessage
@@ -42,48 +96,31 @@ struct MessageBubble: View {
                 } else {
                     // Assistant message: render blocks in order
                     let hidden = message.isStreaming ? [] : message.blocks.compactMap(\.toolCall).filter { isTransientTool($0) && $0.hasNonEmptyResult }
-                    // Filter to only renderable blocks — exclude hidden transient tool blocks from ForEach
-                    // to prevent zero-height TupleViews from introducing VStack spacing.
-                    // Adjacent text blocks made contiguous by hidden tools are merged into a single bubble
-                    // (so continuous text Claude sent across turns due to tool_use appears as one bubble)
-                    let visibleBlocks = Self.mergeAdjacentTextBlocks(
-                        in: message.blocks.filter { block in
-                            if let text = block.text { return !text.isEmpty }
-                            if let toolCall = block.toolCall {
-                                if message.isStreaming { return true }
-                                if isTransientTool(toolCall) { return false }
-                                // Agent/Edit/Write tools are always shown even without a result
-                                // Agent/Edit/Write/AskUserQuestion are always shown even without a result
-                                if toolCall.isKeepAlways { return true }
-                                // Other non-transient tools: only show when there is a result or error (prevents empty tool bubbles)
-                                return toolCall.result != nil || toolCall.isError
-                            }
-                            if block.isThinking { return true }
-                            return false
-                        }
-                    )
+                    let visibleItems = presentationItems
 
                     // Hidden tool summary — shown before text (reflects tool execution → text response order)
                     if !hidden.isEmpty {
                         transientToolSummary(hidden: hidden)
                     }
 
-                    ForEach(visibleBlocks) { block in
-                        if let text = block.text, !text.isEmpty {
-                            assistantTextBubble(text: text, blockId: block.id, hasHiddenTools: !hidden.isEmpty)
-                        }
-                        if let toolCall = block.toolCall {
-                            if toolCall.name == "AskUserQuestion" {
-                                AskUserQuestionView(toolCall: toolCall)
-                            } else {
-                                ToolResultView(toolCall: toolCall, isMessageStreaming: message.isStreaming)
+                    ForEach(visibleItems) { item in
+                        switch item {
+                        case .block(let block):
+                            if let text = block.text, !text.isEmpty {
+                                assistantTextBubble(text: text, blockId: block.id, hasHiddenTools: !hidden.isEmpty)
                             }
-                        }
-                        if block.isThinking {
-                            ThinkingBlockView(
-                                block: block,
-                                isMessageStreaming: message.isStreaming
-                            )
+                            if let toolCall = block.toolCall {
+                                if toolCall.name == "AskUserQuestion" {
+                                    AskUserQuestionView(toolCall: toolCall)
+                                } else {
+                                    ToolResultView(toolCall: toolCall, isMessageStreaming: message.isStreaming)
+                                }
+                            }
+                            if block.isThinking {
+                                thinkingBlock(group: ThinkingBlockGroup(blocks: [block]))
+                            }
+                        case .thinkingGroup(let group):
+                            thinkingBlock(group: group)
                         }
                     }
                 }
@@ -294,6 +331,25 @@ struct MessageBubble: View {
         .accessibilityLabel("Assistant: \(text)")
     }
 
+    @ViewBuilder
+    private func thinkingBlock(group: ThinkingBlockGroup) -> some View {
+        ThinkingBlockView(
+            group: group,
+            isMessageStreaming: message.isStreaming,
+            autoExpandWhileStreaming: chatBridge.autoExpandThinking,
+            disclosureOverride: Binding(
+                get: { chatBridge.thinkingDisclosureOverrides[group.id] },
+                set: { newValue in
+                    if let newValue {
+                        chatBridge.thinkingDisclosureOverrides[group.id] = newValue
+                    } else {
+                        chatBridge.thinkingDisclosureOverrides.removeValue(forKey: group.id)
+                    }
+                }
+            )
+        )
+    }
+
     // MARK: - Copy Button
 
     @ViewBuilder
@@ -358,26 +414,52 @@ struct MessageBubble: View {
         return cat == .readOnly || cat == .execution
     }
 
-    /// Merges adjacent text blocks made contiguous by hidden transient tools.
-    /// Displays continuous text Claude split across turns due to tool_use as a single bubble.
-    ///
-    /// Join rule: respects original trailing/leading whitespace; adds a single space only when
-    /// neither side has whitespace. Forced paragraph breaks would split bullets mid-list,
-    /// so they are avoided — even text following a complete sentence joins naturally with a single space.
-    private static func mergeAdjacentTextBlocks(in blocks: [MessageBlock]) -> [MessageBlock] {
-        var result: [MessageBlock] = []
-        for block in blocks {
-            if block.isText,
-               let lastIdx = result.indices.last,
-               result[lastIdx].isText {
-                let prev = result[lastIdx].text ?? ""
-                let curr = block.text ?? ""
-                let needsSpace = !(prev.last?.isWhitespace ?? true) && !(curr.first?.isWhitespace ?? true)
-                let joined = needsSpace ? prev + " " + curr : prev + curr
-                // Preserve original block id to ensure ForEach diff stability
-                result[lastIdx] = .text(joined, id: result[lastIdx].id)
+    /// Presentation items are built from the original block order before hidden
+    /// tools are removed. This preserves Tool/Text as hard thinking boundaries,
+    /// while still retaining Clarc's existing behavior of joining text made
+    /// visually contiguous by a hidden transient tool.
+    private var presentationItems: [MessagePresentationItem] {
+        let grouped = MessagePresentationBuilder.groupAdjacentThinking(in: message.blocks)
+        let visible = grouped.filter { item in
+            switch item {
+            case .thinkingGroup:
+                return true
+            case .block(let block):
+                return isRenderable(block)
+            }
+        }
+        return Self.mergeAdjacentTextItems(in: visible)
+    }
+
+    private func isRenderable(_ block: MessageBlock) -> Bool {
+        if let text = block.text { return !text.isEmpty }
+        if let toolCall = block.toolCall {
+            if message.isStreaming { return true }
+            if isTransientTool(toolCall) { return false }
+            if toolCall.isKeepAlways { return true }
+            return toolCall.result != nil || toolCall.isError
+        }
+        return block.isThinking
+    }
+
+    /// Join rule matches the previous implementation: preserve explicit
+    /// whitespace and add one space only when neither side supplies it.
+    private static func mergeAdjacentTextItems(in items: [MessagePresentationItem]) -> [MessagePresentationItem] {
+        var result: [MessagePresentationItem] = []
+        for item in items {
+            if case .block(let block) = item,
+               block.isText,
+               let lastIndex = result.indices.last,
+               case .block(let previousBlock) = result[lastIndex],
+               previousBlock.isText {
+                let previous = previousBlock.text ?? ""
+                let current = block.text ?? ""
+                let needsSpace = !(previous.last?.isWhitespace ?? true)
+                    && !(current.first?.isWhitespace ?? true)
+                let joined = needsSpace ? previous + " " + current : previous + current
+                result[lastIndex] = .block(.text(joined, id: previousBlock.id))
             } else {
-                result.append(block)
+                result.append(item)
             }
         }
         return result
@@ -478,4 +560,3 @@ struct MessageBubble: View {
         )) ?? AttributedString(text)
     }
 }
-

@@ -257,3 +257,10 @@
 
 // MARK: - AskUserQuestionView
 "Question" = "Pregunta";
+
+// MARK: - Thinking
+"thinking.header.streaming" = "Pensando…";
+"thinking.header.completed" = "Razonamiento";
+"thinking.header.duration" = "Razonó durante %@";
+"thinking.header.redacted" = "Razonamiento cifrado (oculto)";
+"thinking.header.segmentCount" = "%@ · %lld segmentos";

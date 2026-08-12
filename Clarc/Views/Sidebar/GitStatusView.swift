@@ -11,6 +11,8 @@ struct GitStatusView: View {
     @State private var localBranches: [String] = []
     @State private var remoteBranches: [RemoteBranch] = []
     @State private var headWatcher: (any DispatchSourceFileSystemObject)?
+    @State private var showChangesPopover = false
+    @State private var changesPage: ChangesPage = .all
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -53,7 +55,7 @@ struct GitStatusView: View {
                         .foregroundStyle(ClaudeTheme.textSecondary)
                 }
 
-            case .dirty(let branch, let changes):
+            case .dirty(let branch, let changes, let entries):
                 // First row: branch button + refresh
                 HStack(spacing: 8) {
                     branchMenu(branch)
@@ -61,23 +63,37 @@ struct GitStatusView: View {
                     refreshButton
                 }
                 // Second row: change status + badges
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(ClaudeTheme.accent)
-                        .frame(width: 6, height: 6)
-                    Text("\(changes.total) changed")
-                        .font(.system(size: ClaudeTheme.size(11)))
-                        .foregroundStyle(ClaudeTheme.accent)
+                Button {
+                    showChangesPopover.toggle()
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(ClaudeTheme.accent)
+                            .frame(width: 6, height: 6)
+                        Text("\(changes.total) changed")
+                            .font(.system(size: ClaudeTheme.size(11)))
+                            .foregroundStyle(ClaudeTheme.accent)
 
-                    if changes.modified > 0 {
-                        badge("M \(changes.modified)", color: .blue)
+                        if changes.modified > 0 {
+                            badge("M \(changes.modified)", color: .blue)
+                        }
+                        if changes.added > 0 {
+                            badge("A \(changes.added)", color: ClaudeTheme.statusSuccess)
+                        }
+                        if changes.deleted > 0 {
+                            badge("D \(changes.deleted)", color: ClaudeTheme.statusError)
+                        }
+
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: ClaudeTheme.size(8), weight: .semibold))
+                            .foregroundStyle(ClaudeTheme.textTertiary)
                     }
-                    if changes.added > 0 {
-                        badge("A \(changes.added)", color: ClaudeTheme.statusSuccess)
-                    }
-                    if changes.deleted > 0 {
-                        badge("D \(changes.deleted)", color: ClaudeTheme.statusError)
-                    }
+                }
+                .buttonStyle(.plain)
+                .help("Review changes")
+                .popover(isPresented: $showChangesPopover, arrowEdge: .bottom) {
+                    changesPopover(entries: entries)
                 }
 
             case .error:
@@ -213,7 +229,7 @@ struct GitStatusView: View {
     private var currentBranchName: String? {
         switch gitStatus {
         case .clean(let branch): branch
-        case .dirty(let branch, _): branch
+        case .dirty(let branch, _, _): branch
         default: nil
         }
     }
@@ -228,6 +244,338 @@ struct GitStatusView: View {
             .background(color.opacity(0.15))
             .foregroundStyle(color)
             .clipShape(Capsule())
+    }
+
+    // MARK: - Changes Popover
+
+    private enum ChangesPage: String, CaseIterable, Identifiable {
+        case all = "All Changes"
+        case lastTurn = "Last Turn"
+
+        var id: Self { self }
+    }
+
+    private struct TurnTouchedFile: Identifiable {
+        let path: String
+        let toolName: String
+        var id: String { path }
+    }
+
+    private func changesPopover(entries: [GitPorcelainEntry]) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Changes")
+                    .font(.system(size: ClaudeTheme.size(13), weight: .semibold))
+                    .foregroundStyle(ClaudeTheme.textPrimary)
+
+                Spacer()
+
+                Button {
+                    refresh()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: ClaudeTheme.size(10)))
+                        .foregroundStyle(ClaudeTheme.textTertiary)
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh")
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+
+            Picker("", selection: $changesPage) {
+                ForEach(ChangesPage.allCases) { page in
+                    Text(LocalizedStringKey(page.rawValue)).tag(page)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+
+            ClaudeThemeDivider()
+
+            switch changesPage {
+            case .all:
+                allChangesList(entries)
+            case .lastTurn:
+                lastTurnChangesList(gitEntries: entries)
+            }
+        }
+        .frame(width: 420, height: 360)
+        .background(ClaudeTheme.background)
+    }
+
+    private func allChangesList(_ entries: [GitPorcelainEntry]) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(entries) { entry in
+                    Button {
+                        openGitEntry(entry)
+                    } label: {
+                        gitEntryRow(entry)
+                    }
+                    .buttonStyle(.plain)
+
+                    if entry.id != entries.last?.id {
+                        ClaudeThemeDivider().padding(.leading, 36)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func lastTurnChangesList(gitEntries: [GitPorcelainEntry]) -> some View {
+        let files = lastTurnTouchedFiles
+        return VStack(spacing: 0) {
+            if files.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "wrench.and.screwdriver")
+                        .font(.system(size: ClaudeTheme.size(18)))
+                        .foregroundStyle(ClaudeTheme.textTertiary)
+                    Text("No files touched this turn")
+                        .font(.system(size: ClaudeTheme.size(11)))
+                        .foregroundStyle(ClaudeTheme.textSecondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(files) { file in
+                            let canOpen = canOpenTouchedFile(file, gitEntries: gitEntries)
+                            Button {
+                                openTouchedFile(file, gitEntries: gitEntries)
+                            } label: {
+                                touchedFileRow(file)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!canOpen)
+
+                            if file.id != files.last?.id {
+                                ClaudeThemeDivider().padding(.leading, 36)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            ClaudeThemeDivider()
+            Text("Only files explicitly reported by Claude editing tools are shown.")
+                .font(.system(size: ClaudeTheme.size(10)))
+                .foregroundStyle(ClaudeTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        }
+    }
+
+    private func gitEntryRow(_ entry: GitPorcelainEntry) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: changeIcon(entry.kind))
+                .font(.system(size: ClaudeTheme.size(11), weight: .medium))
+                .foregroundStyle(changeColor(entry.kind))
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let originalPath = entry.originalPath {
+                    Text("\(originalPath) → \(entry.path)")
+                        .font(.system(size: ClaudeTheme.size(11), design: .monospaced))
+                        .foregroundStyle(ClaudeTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else {
+                    Text(entry.path)
+                        .font(.system(size: ClaudeTheme.size(11), design: .monospaced))
+                        .foregroundStyle(ClaudeTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                HStack(spacing: 5) {
+                    changeTag(changeLabel(entry.kind), color: changeColor(entry.kind))
+                    if entry.isUntracked {
+                        changeTag("Untracked", color: ClaudeTheme.statusSuccess)
+                    } else {
+                        if entry.isStaged { changeTag("Staged", color: ClaudeTheme.accent) }
+                        if entry.isUnstaged { changeTag("Unstaged", color: ClaudeTheme.textSecondary) }
+                    }
+                }
+            }
+
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.system(size: ClaudeTheme.size(8), weight: .semibold))
+                .foregroundStyle(ClaudeTheme.textTertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+
+    private func touchedFileRow(_ file: TurnTouchedFile) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: "doc.text")
+                .font(.system(size: ClaudeTheme.size(11)))
+                .foregroundStyle(ClaudeTheme.accent)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(displayPath(file.path))
+                    .font(.system(size: ClaudeTheme.size(11), design: .monospaced))
+                    .foregroundStyle(ClaudeTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(file.toolName)
+                    .font(.system(size: ClaudeTheme.size(10), weight: .medium))
+                    .foregroundStyle(ClaudeTheme.textTertiary)
+            }
+
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.system(size: ClaudeTheme.size(8), weight: .semibold))
+                .foregroundStyle(ClaudeTheme.textTertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+
+    private func changeTag(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: ClaudeTheme.size(9), weight: .medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.12), in: Capsule())
+    }
+
+    private func changeLabel(_ kind: GitPorcelainEntry.Kind) -> String {
+        switch kind {
+        case .modified: "Modified"
+        case .added: "Added"
+        case .deleted: "Deleted"
+        case .renamed: "Renamed"
+        case .copied: "Copied"
+        case .untracked: "Added"
+        case .conflicted: "Conflict"
+        case .typeChanged: "Type Changed"
+        case .unknown: "Changed"
+        }
+    }
+
+    private func changeIcon(_ kind: GitPorcelainEntry.Kind) -> String {
+        switch kind {
+        case .added, .untracked: "plus.circle"
+        case .deleted: "minus.circle"
+        case .renamed: "arrow.right.circle"
+        case .copied: "doc.on.doc"
+        case .conflicted: "exclamationmark.triangle"
+        case .modified, .typeChanged, .unknown: "pencil.circle"
+        }
+    }
+
+    private func changeColor(_ kind: GitPorcelainEntry.Kind) -> Color {
+        switch kind {
+        case .added, .untracked: ClaudeTheme.statusSuccess
+        case .deleted, .conflicted: ClaudeTheme.statusError
+        case .renamed, .copied: ClaudeTheme.accent
+        case .modified, .typeChanged, .unknown: .blue
+        }
+    }
+
+    private var lastTurnTouchedFiles: [TurnTouchedFile] {
+        let messages = appState.streamState(in: windowState).allMessages
+        guard let lastUserIndex = messages.lastIndex(where: { $0.role == .user }) else { return [] }
+
+        let supportedTools: Set<String> = ["edit", "write", "multiedit", "notebookedit"]
+        var filesByPath: [String: TurnTouchedFile] = [:]
+
+        for message in messages[messages.index(after: lastUserIndex)...] {
+            for toolCall in message.toolCalls {
+                let normalizedName = toolCall.name
+                    .lowercased()
+                    .replacingOccurrences(of: "_", with: "")
+                guard supportedTools.contains(normalizedName),
+                      toolCall.result != nil,
+                      !toolCall.isError,
+                      let rawPath = toolPath(from: toolCall),
+                      !rawPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    continue
+                }
+
+                let path = absolutePath(rawPath)
+                filesByPath[path] = TurnTouchedFile(path: path, toolName: toolCall.name)
+            }
+        }
+
+        return filesByPath.values.sorted {
+            displayPath($0.path).localizedStandardCompare(displayPath($1.path)) == .orderedAscending
+        }
+    }
+
+    private func toolPath(from toolCall: ToolCall) -> String? {
+        let keys = ["file_path", "notebook_path", "path"]
+        return keys.lazy.compactMap { toolCall.input[$0]?.stringValue }.first
+    }
+
+    private func absolutePath(_ rawPath: String) -> String {
+        let expanded = (rawPath as NSString).expandingTildeInPath
+        if expanded.hasPrefix("/") {
+            return (expanded as NSString).standardizingPath
+        }
+        return (URL(fileURLWithPath: projectPath, isDirectory: true)
+            .appendingPathComponent(expanded).path as NSString).standardizingPath
+    }
+
+    private func displayPath(_ absolutePath: String) -> String {
+        let root = (projectPath as NSString).standardizingPath
+        let path = (absolutePath as NSString).standardizingPath
+        if path == root { return "." }
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        if path.hasPrefix(prefix) { return String(path.dropFirst(prefix.count)) }
+        return path
+    }
+
+    private func absoluteGitPath(_ entry: GitPorcelainEntry) -> String {
+        (URL(fileURLWithPath: projectPath, isDirectory: true)
+            .appendingPathComponent(entry.path).path as NSString).standardizingPath
+    }
+
+    private func openGitEntry(_ entry: GitPorcelainEntry) {
+        let path = absoluteGitPath(entry)
+        let preview = PreviewFile(path: path, name: URL(fileURLWithPath: path).lastPathComponent)
+        if entry.isUntracked {
+            windowState.inspectorFile = preview
+        } else {
+            windowState.diffFile = preview
+        }
+        showChangesPopover = false
+    }
+
+    private func matchingGitEntry(for file: TurnTouchedFile, in entries: [GitPorcelainEntry]) -> GitPorcelainEntry? {
+        entries.first { absoluteGitPath($0) == file.path }
+    }
+
+    private func canOpenTouchedFile(_ file: TurnTouchedFile, gitEntries: [GitPorcelainEntry]) -> Bool {
+        matchingGitEntry(for: file, in: gitEntries) != nil
+            || FileManager.default.fileExists(atPath: file.path)
+    }
+
+    private func openTouchedFile(_ file: TurnTouchedFile, gitEntries: [GitPorcelainEntry]) {
+        let preview = PreviewFile(path: file.path, name: URL(fileURLWithPath: file.path).lastPathComponent)
+        if let entry = matchingGitEntry(for: file, in: gitEntries), !entry.isUntracked {
+            windowState.diffFile = preview
+        } else if FileManager.default.fileExists(atPath: file.path) {
+            windowState.inspectorFile = preview
+        } else {
+            return
+        }
+        showChangesPopover = false
     }
 
     // MARK: - HEAD Watcher
@@ -281,7 +629,7 @@ enum GitStatusInfo: Sendable {
     case loading
     case notARepo
     case clean(branch: String)
-    case dirty(branch: String, changes: ChangeCount)
+    case dirty(branch: String, changes: ChangeCount, entries: [GitPorcelainEntry])
     case error
 
     struct ChangeCount: Sendable {
@@ -289,6 +637,25 @@ enum GitStatusInfo: Sendable {
         let added: Int
         let deleted: Int
         var total: Int { modified + added + deleted }
+
+        init(entries: [GitPorcelainEntry]) {
+            var modified = 0
+            var added = 0
+            var deleted = 0
+            for entry in entries {
+                switch entry.kind {
+                case .added, .untracked:
+                    added += 1
+                case .deleted:
+                    deleted += 1
+                default:
+                    modified += 1
+                }
+            }
+            self.modified = modified
+            self.added = added
+            self.deleted = deleted
+        }
     }
 }
 
@@ -297,7 +664,9 @@ enum GitStatusInfo: Sendable {
 private func fetchGitStatus(at path: String) async -> GitStatusInfo {
     // Run both git calls in parallel — saves the slower one's wait time (~100-250ms)
     async let branchResult = GitHelper.run(["rev-parse", "--abbrev-ref", "HEAD"], at: path)
-    async let statusResult = GitHelper.run(["status", "--porcelain"], at: path)
+    async let statusResult = GitHelper.run([
+        "status", "--porcelain=v1", "-z", "--untracked-files=all",
+    ], at: path)
     let (b, s) = await (branchResult, statusResult)
 
     guard let branchRaw = b, !branchRaw.isEmpty else { return .notARepo }
@@ -305,14 +674,15 @@ private func fetchGitStatus(at path: String) async -> GitStatusInfo {
 
     let branch = branchRaw.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    if statusRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    let entries = parseGitStatusPorcelainV1Z(statusRaw)
+    if entries.isEmpty {
         return .clean(branch: branch)
     }
 
-    let counts = parseGitStatusPorcelain(statusRaw)
     return .dirty(
         branch: branch,
-        changes: .init(modified: counts.modified, added: counts.added, deleted: counts.deleted)
+        changes: .init(entries: entries),
+        entries: entries
     )
 }
 

@@ -23,6 +23,9 @@
 "Used for new sessions. You can override the model per session from the toolbar." = "新規セッションのデフォルトです。ツールバーからセッションごとにモデルを変更できます。";
 "Default Permission Mode" = "デフォルト権限モード（Permission Mode）";
 "Used for new sessions. You can override the permission mode per session from the toolbar." = "新規セッションのデフォルトです。ツールバーからセッションごとに権限モードを変更できます。";
+"Thinking Display" = "思考過程の表示";
+"thinking.auto.expand.desc" = "ストリーミング中に思考過程を自動的に開くかを設定します。手動での展開・折りたたみが常に優先されます。";
+"Auto-expand thinking while Claude is working" = "Claude の処理中に思考過程を自動展開";
 "Default Effort Level" = "デフォルト作業量レベル（Effort Level）";
 "Used for new sessions. You can override the effort level per session from the toolbar." = "新規セッションのデフォルトです。ツールバーからセッションごとに Effort レベルを変更できます。";
 "Font Size" = "フォントサイズ";
@@ -59,6 +62,14 @@
 "Select Model" = "モデルを選択";
 "Select Effort Level" = "Effort レベルを選択";
 "↑↓ Select  ↵ Confirm  esc Cancel" = "↑↓ 選択  ↵ 確定  esc キャンセル";
+"Quick Switcher" = "クイックスイッチャー";
+"Open Quick Switcher" = "クイックスイッチャーを開く";
+"Search projects and chats..." = "プロジェクトとチャットを検索...";
+"No matching projects or chats" = "一致するプロジェクトやチャットはありません";
+"Project" = "プロジェクト";
+"Chat" = "チャット";
+"Pinned" = "ピン留め";
+"Running" = "実行中";
 
 // MARK: - SkillMarketView
 "Refresh" = "更新";
@@ -109,6 +120,17 @@
 "Delete Project" = "プロジェクトを削除";
 "This will remove the project from Clarc. The files on disk will not be deleted." = "Clarc からプロジェクトが削除されます。ディスク上のファイルは削除されません。";
 "Project name" = "プロジェクト名";
+"Pin Project" = "プロジェクトをピン留め";
+"Unpin Project" = "プロジェクトのピン留めを解除";
+"Remove Project" = "プロジェクトを Clarc から外す";
+"Remove \"%@\" from Clarc?" = "「%@」を Clarc から外しますか？";
+"Pin Chat" = "チャットをピン留め";
+"Unpin Chat" = "チャットのピン留めを解除";
+"Rename Chat" = "チャット名を変更";
+"Chat name" = "チャット名";
+"Delete Chat?" = "チャットを削除しますか？";
+"Delete Chat" = "チャットを削除";
+"This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc." = "対応する Claude Code のチャット履歴が削除されます。Clarc から復元することはできません。";
 
 // MARK: - HistoryListView
 "Show current project only" = "現在のプロジェクトのみ表示";
@@ -130,6 +152,9 @@
 "Unpin" = "ピン留めを解除";
 "Pin" = "ピン留め";
 "No chat history" = "セッションがありません";
+"No Projects" = "プロジェクトがありません";
+"Show More" = "さらに表示";
+"Show Less" = "折りたたむ";
 
 // MARK: - GitStatusView
 "Checking..." = "確認中...";
@@ -142,6 +167,12 @@
 "No local branches" = "ローカルブランチがありません";
 "No remote branches" = "リモートブランチがありません";
 "Switch Branch" = "ブランチを切り替え";
+"Changes" = "変更";
+"All Changes" = "すべての変更";
+"Last Turn" = "直前のターン";
+"Files Touched This Turn" = "このターンで触れたファイル";
+"No files touched this turn" = "このターンで触れたファイルはありません";
+"Only files explicitly reported by Claude editing tools are shown." = "Claude の編集ツールが明示的に報告したファイルのみ表示されます。";
 
 // MARK: - FileInspectorView
 "Preview" = "プレビュー";
@@ -156,11 +187,11 @@
 
 // MARK: - ChatToolbarControls
 "Permission Mode" = "権限モード";
-"Ask" = "確認する";
+"Ask" = "手動確認";
 "Accept Edits" = "編集を許可";
 "Plan" = "プランモード";
 "Auto" = "自動モード";
-"Bypass" = "権限スキップ";
+"Bypass" = "権限をスキップ";
 "Model Picker" = "モデル";
 "Effort Picker" = "作業量";
 "Auto Effort" = "自動";

@@ -257,3 +257,10 @@
 
 // MARK: - AskUserQuestionView
 "Question" = "问题";
+
+// MARK: - Thinking
+"thinking.header.streaming" = "思考中…";
+"thinking.header.completed" = "思考过程";
+"thinking.header.duration" = "已思考 %@";
+"thinking.header.redacted" = "加密思考（已隐藏）";
+"thinking.header.segmentCount" = "%@ · %lld 段";

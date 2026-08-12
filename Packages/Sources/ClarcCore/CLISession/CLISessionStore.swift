@@ -7,10 +7,12 @@ import os
 public actor CLISessionStore {
 
     private let metaStore: SessionMetaStore
+    private let projectsRootURL: URL
     private let logger = Logger(subsystem: "com.claudework", category: "CLISessionStore")
 
     private static let titleSniffLineLimit = 400
-    private static let cwdProbeLineLimit = 5
+    private static let cwdProbeLineLimit = 2_000
+    private static let cwdProbeFileLimit = 8
     private static let cwdIndexTTL: TimeInterval = 60
     private static let lastTimestampTailBytes: Int = 16 * 1024
 
@@ -19,6 +21,9 @@ public actor CLISessionStore {
     /// slash/dot collision in the directory-name encoding.
     private var cwdIndex: [String: URL] = [:]
     private var cwdIndexBuiltAt: Date?
+    /// Direct CLI project directory → recovered cwd. Successful entries never
+    /// need to be re-sniffed when the JSONL inside them is merely appended to.
+    private var directoryCwdCache: [URL: String] = [:]
 
     /// Per-sid cache of jsonl sniff results, keyed by sid and invalidated by
     /// file mtime. Avoids re-reading the first ~400 lines of every jsonl every
@@ -40,21 +45,22 @@ public actor CLISessionStore {
     /// Foundation's `.iso8601` strategy doesn't accept fractional seconds, so we
     /// install a custom strategy that tries with-then-without.
     private static let dateStrategy: JSONDecoder.DateDecodingStrategy = {
-        let withFractional = ISO8601DateFormatter()
-        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
         return .custom { decoder in
             let c = try decoder.singleValueContainer()
             let s = try c.decode(String.self)
-            if let d = withFractional.date(from: s) { return d }
-            if let d = plain.date(from: s) { return d }
+            if let d = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(s) {
+                return d
+            }
+            if let d = try? Date.ISO8601FormatStyle(includingFractionalSeconds: false).parse(s) {
+                return d
+            }
             throw DecodingError.dataCorruptedError(in: c, debugDescription: "Invalid ISO8601 date: \(s)")
         }
     }()
 
-    public init(metaStore: SessionMetaStore) {
+    public init(metaStore: SessionMetaStore, projectsRootURL: URL = CLIProjectsDirectory.url) {
         self.metaStore = metaStore
+        self.projectsRootURL = projectsRootURL
     }
 
     // MARK: - Discovery
@@ -66,7 +72,7 @@ public actor CLISessionStore {
     public func directory(forCwd cwd: String) async -> URL {
         await ensureCwdIndex()
         if let url = cwdIndex[cwd.standardizedCwd()] { return url }
-        return CLIProjectsDirectory.directory(forCwd: cwd)
+        return projectsRootURL.appendingPathComponent(cwd.cliProjectDirName(), isDirectory: true)
     }
 
     public func sessionFiles(forCwd cwd: String) async -> [URL] {
@@ -83,12 +89,12 @@ public actor CLISessionStore {
             .sorted { (mtime(of: $0) ?? .distantPast) > (mtime(of: $1) ?? .distantPast) }
     }
 
-    private func ensureCwdIndex() async {
-        if let builtAt = cwdIndexBuiltAt,
+    private func ensureCwdIndex(forceRefresh: Bool = false) async {
+        if !forceRefresh, let builtAt = cwdIndexBuiltAt,
            Date().timeIntervalSince(builtAt) < Self.cwdIndexTTL {
             return
         }
-        let projectsRoot = CLIProjectsDirectory.url
+        let projectsRoot = projectsRootURL
         guard let dirs = try? FileManager.default.contentsOfDirectory(
             at: projectsRoot,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -103,11 +109,19 @@ public actor CLISessionStore {
             (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
         }
 
+        let candidateSet = Set(candidates.map(\.standardizedFileURL))
+        directoryCwdCache = directoryCwdCache.filter { candidateSet.contains($0.key) }
+
         let pairs: [(cwd: String, url: URL)] = await withTaskGroup(of: (String, URL)?.self) { group in
             for dir in candidates {
+                let standardizedDir = dir.standardizedFileURL
+                if let cached = directoryCwdCache[standardizedDir] {
+                    group.addTask { (cached, standardizedDir) }
+                    continue
+                }
                 group.addTask { [self] in
                     guard let cwd = await self.sniffCwd(in: dir) else { return nil }
-                    return (cwd.standardizedCwd(), dir)
+                    return (cwd.standardizedCwd(), standardizedDir)
                 }
             }
             var results: [(String, URL)] = []
@@ -117,17 +131,61 @@ public actor CLISessionStore {
             return results
         }
 
+        for pair in pairs {
+            directoryCwdCache[pair.url] = pair.cwd
+        }
         cwdIndex = Dictionary(pairs.map { ($0.cwd, $0.url) }, uniquingKeysWith: { first, _ in first })
         cwdIndexBuiltAt = Date()
         logger.debug("Built CLI cwd index: \(self.cwdIndex.count, privacy: .public) entries")
     }
 
+    /// Discover every existing workspace referenced by a first-level Claude
+    /// Code project directory. Nested `subagents` folders are never enumerated.
+    public func discoverProjects(forceRefresh: Bool = false) async -> [DiscoveredCLIProject] {
+        await ensureCwdIndex(forceRefresh: forceRefresh)
+        let fm = FileManager.default
+        var discovered: [DiscoveredCLIProject] = []
+
+        for (cwd, directory) in cwdIndex {
+            var isDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: cwd, isDirectory: &isDirectory), isDirectory.boolValue else {
+                continue
+            }
+
+            let files = (try? fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: .skipsHiddenFiles
+            )) ?? []
+            let latest = files
+                .filter { $0.pathExtension == "jsonl" }
+                .compactMap { mtime(of: $0) }
+                .max()
+
+            discovered.append(DiscoveredCLIProject(
+                cwd: cwd,
+                cliDirectory: directory,
+                latestActivityAt: latest
+            ))
+        }
+
+        return discovered.sorted {
+            switch ($0.latestActivityAt, $1.latestActivityAt) {
+            case let (lhs?, rhs?) where lhs != rhs: return lhs > rhs
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return $0.cwd.localizedStandardCompare($1.cwd) == .orderedAscending
+            }
+        }
+    }
+
     private struct CwdProbe: Decodable { let cwd: String? }
 
-    /// Read the most recently touched jsonl in a directory and pluck out the
-    /// `cwd` field. Only the first ~5 valid lines are inspected — user/
-    /// assistant/system lines all carry cwd, but the very first line is often
-    /// a `file-history-snapshot` that doesn't.
+    /// Recover the most likely cwd from several recent root-level JSONL files.
+    /// Sessions can contain an early record from a broader cwd (for example the
+    /// user's home directory) before moving into the actual workspace. Prefer
+    /// a candidate whose forward encoding matches the directory name, then the
+    /// most specific path rather than blindly taking the first line.
     private func sniffCwd(in directory: URL) async -> String? {
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: directory,
@@ -138,23 +196,35 @@ public actor CLISessionStore {
             .filter { $0.pathExtension == "jsonl" }
             .sorted { (mtime(of: $0) ?? .distantPast) > (mtime(of: $1) ?? .distantPast) }
 
-        for url in sorted {
+        var candidates = Set<String>()
+        for url in sorted.prefix(Self.cwdProbeFileLimit) {
             var seen = 0
             do {
                 for try await rawLine in url.lines {
                     if seen >= Self.cwdProbeLineLimit { break }
                     seen += 1
-                    guard !rawLine.isEmpty,
+                    guard rawLine.contains("\"cwd\""),
                           let data = rawLine.data(using: .utf8),
                           let probe = try? decoder.decode(CwdProbe.self, from: data),
                           let cwd = probe.cwd, !cwd.isEmpty else { continue }
-                    return cwd
+                    candidates.insert(cwd.standardizedCwd())
                 }
             } catch {
                 continue
             }
         }
-        return nil
+
+        let encodedDirectoryName = directory.lastPathComponent
+        if let exact = candidates
+            .filter({ $0.cliProjectDirName() == encodedDirectoryName })
+            .max(by: { $0.count < $1.count }) {
+            return exact
+        }
+        return candidates.max { lhs, rhs in
+            let lhsDepth = lhs.split(separator: "/").count
+            let rhsDepth = rhs.split(separator: "/").count
+            return lhsDepth == rhsDepth ? lhs.count < rhs.count : lhsDepth < rhsDepth
+        }
     }
 
     // MARK: - Summaries
@@ -350,7 +420,7 @@ public actor CLISessionStore {
         cwd: String,
         projectId: UUID
     ) async -> ChatSession? {
-        let url = await jsonlURL(sid: sid, cwd: cwd)
+        let url = await sessionFileURL(sid: sid, cwd: cwd)
 
         var lines: [CLISessionLine] = []
         var firstTimestamp: Date?
@@ -430,7 +500,7 @@ public actor CLISessionStore {
     /// Rewrite the session's jsonl so it appears in the `claude --resume` picker.
     /// Delegates to ``PickerExposer``; uses the cwd index for accurate URL resolution.
     public func exposeToPicker(sid: String, cwd: String) async {
-        await PickerExposer.normalize(jsonlAt: await jsonlURL(sid: sid, cwd: cwd))
+        await PickerExposer.normalize(jsonlAt: await sessionFileURL(sid: sid, cwd: cwd))
     }
 
     // MARK: - Fork
@@ -450,7 +520,7 @@ public actor CLISessionStore {
         atMessageTimestamp messageTimestamp: Date,
         role: Role
     ) async -> String? {
-        let originalURL = await jsonlURL(sid: sid, cwd: cwd)
+        let originalURL = await sessionFileURL(sid: sid, cwd: cwd)
         let directory = originalURL.deletingLastPathComponent()
 
         let data: Data
@@ -568,9 +638,17 @@ public actor CLISessionStore {
 
     // MARK: - Deletion
 
-    /// Remove the CLI-owned jsonl for a session.
-    public func deleteSession(sid: String, cwd: String) async {
-        let url = await jsonlURL(sid: sid, cwd: cwd)
+    /// Resolve the exact CLI-owned JSONL for a session. Uses the cwd index so
+    /// callers do not need to reverse Claude Code's lossy directory encoding.
+    public func sessionFileURL(sid: String, cwd: String) async -> URL {
+        await directory(forCwd: cwd).appendingPathComponent("\(sid).jsonl")
+    }
+
+    /// Remove the CLI-owned jsonl for a session. A missing file is an
+    /// idempotent success; real filesystem failures propagate to the caller so
+    /// the UI does not discard its in-memory record while the history remains.
+    public func deleteSession(sid: String, cwd: String) async throws {
+        let url = await sessionFileURL(sid: sid, cwd: cwd)
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return }
         do {
@@ -578,11 +656,8 @@ public actor CLISessionStore {
             logger.debug("Deleted CLI session jsonl \(sid, privacy: .public)")
         } catch {
             logger.error("Failed to delete CLI session jsonl \(sid, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
         }
-    }
-
-    private func jsonlURL(sid: String, cwd: String) async -> URL {
-        await directory(forCwd: cwd).appendingPathComponent("\(sid).jsonl")
     }
 
     // MARK: - External activity detection (S2)

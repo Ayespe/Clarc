@@ -22,13 +22,20 @@ public enum GitHelper {
             return nil
         }
 
+        // Drain stdout while git is running. Waiting for termination before
+        // reading can deadlock on repositories whose status exceeds the pipe
+        // buffer (notably with --untracked-files=all).
+        let outputTask = Task.detached(priority: .utility) {
+            pipe.fileHandleForReading.readDataToEndOfFile()
+        }
+
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             process.terminationHandler = { _ in
                 continuation.resume()
             }
         }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let data = await outputTask.value
         guard process.terminationStatus == 0 else { return nil }
         return String(data: data, encoding: .utf8)
     }

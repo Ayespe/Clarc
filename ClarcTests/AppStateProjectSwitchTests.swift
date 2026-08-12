@@ -139,9 +139,83 @@ final class AppStateProjectSwitchTests: XCTestCase {
                        "A stream is not foreground when the window shows a different session")
     }
 
+    // MARK: - Default permission precedence and migration
+
+    func testPermissionResolver_explicitClarcChoiceBeatsClaudeSettings() throws {
+        let defaults = makeIsolatedDefaults()
+        defaults.set(PermissionMode.plan.rawValue, forKey: "selectedPermissionMode")
+        defaults.set(true, forKey: "selectedPermissionModeExplicitlySet")
+        let settings = try makeClaudeSettings(defaultMode: PermissionMode.acceptEdits.rawValue)
+
+        XCTAssertEqual(
+            AppState.resolveDefaultPermissionMode(defaults: defaults, claudeSettingsURL: settings),
+            .plan
+        )
+    }
+
+    func testPermissionResolver_usesClaudeSettingsWhenClarcHasNoChoice() throws {
+        let defaults = makeIsolatedDefaults()
+        let settings = try makeClaudeSettings(defaultMode: PermissionMode.default.rawValue)
+
+        XCTAssertEqual(
+            AppState.resolveDefaultPermissionMode(defaults: defaults, claudeSettingsURL: settings),
+            .default
+        )
+    }
+
+    func testPermissionResolver_fallsBackToAutoForMissingOrDamagedSettings() throws {
+        let defaults = makeIsolatedDefaults()
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("settings.json")
+        XCTAssertEqual(
+            AppState.resolveDefaultPermissionMode(defaults: defaults, claudeSettingsURL: missing),
+            .auto
+        )
+
+        let damaged = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clarc-permission-\(UUID().uuidString).json")
+        try Data("{".utf8).write(to: damaged)
+        XCTAssertEqual(
+            AppState.resolveDefaultPermissionMode(defaults: defaults, claudeSettingsURL: damaged),
+            .auto
+        )
+    }
+
+    func testPermissionResolver_migratesLegacySavedChoiceAsExplicit() {
+        let defaults = makeIsolatedDefaults()
+        defaults.set(PermissionMode.bypassPermissions.rawValue, forKey: "selectedPermissionMode")
+
+        XCTAssertEqual(
+            AppState.resolveDefaultPermissionMode(
+                defaults: defaults,
+                claudeSettingsURL: URL(fileURLWithPath: "/a/path/that/does/not/exist")
+            ),
+            .bypassPermissions
+        )
+        XCTAssertTrue(defaults.bool(forKey: "selectedPermissionModeExplicitlySet"))
+    }
+
     // MARK: - Helpers
 
     private func makeProject(_ name: String) -> Project {
         Project(name: name, path: "/tmp/\(name.lowercased())", gitHubRepo: nil)
+    }
+
+    private func makeIsolatedDefaults() -> UserDefaults {
+        let suite = "ClarcTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    private func makeClaudeSettings(defaultMode: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clarc-permission-\(UUID().uuidString).json")
+        let data = try JSONSerialization.data(withJSONObject: [
+            "permissions": ["defaultMode": defaultMode]
+        ])
+        try data.write(to: url)
+        return url
     }
 }

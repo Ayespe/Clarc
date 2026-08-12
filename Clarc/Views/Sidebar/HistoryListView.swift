@@ -15,6 +15,7 @@ struct HistoryListView: View {
     @AppStorage("historyShowAllProjects") private var showAllProjects = true
     @AppStorage("historyHideCompleted") private var hideCompleted = false
     @State private var showDeleteAllAlert = false
+    @State private var sessionIdsPendingDeletion = Set<String>()
     /// Sessions just marked complete while completed items are hidden — kept
     /// visible briefly so the checkmark animation plays before they slide out.
     @State private var pendingHideIds: Set<String> = []
@@ -31,8 +32,9 @@ struct HistoryListView: View {
                 sessionList
             }
         }
-        .alert("Delete All", isPresented: $showDeleteAllAlert) {
-            Button("Delete", role: .destructive) {
+        .alert("Delete All Chats", isPresented: $showDeleteAllAlert) {
+            Button("Delete Chats", role: .destructive) {
+                guard !deleteAllTargets.contains(where: { appState.isSessionStreaming($0.id) }) else { return }
                 let projectId: UUID?
                 if windowState.isProjectWindow {
                     projectId = windowState.selectedProject?.id
@@ -45,13 +47,13 @@ struct HistoryListView: View {
         } message: {
             let isCurrentOnly = windowState.isProjectWindow || !showAllProjects
             if isCurrentOnly {
-                Text("All sessions in the current project will be deleted. This action cannot be undone.")
+                Text("All chats in the current project and their corresponding Claude Code history will be deleted. They cannot be recovered through Clarc.")
             } else {
-                Text("All sessions will be deleted. This action cannot be undone.")
+                Text("All chats and their corresponding Claude Code history will be deleted. They cannot be recovered through Clarc.")
             }
         }
-        .alert("Rename Session", isPresented: isRenamingBinding) {
-            TextField("Session name", text: $renameText)
+        .alert("Rename Chat", isPresented: isRenamingBinding) {
+            TextField("Chat name", text: $renameText)
             Button("Rename") {
                 if let session = renamingSession, !renameText.isEmpty {
                     Task { await appState.renameSession(session, to: renameText) }
@@ -61,6 +63,24 @@ struct HistoryListView: View {
             Button("Cancel", role: .cancel) {
                 renamingSession = nil
             }
+        }
+        .confirmationDialog(
+            sessionIdsPendingDeletion.count > 1 ? "Delete Chats?" : "Delete Chat?",
+            isPresented: Binding(
+                get: { !sessionIdsPendingDeletion.isEmpty },
+                set: { if !$0 { sessionIdsPendingDeletion = [] } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(sessionIdsPendingDeletion.count > 1 ? "Delete Chats" : "Delete Chat", role: .destructive) {
+                let ids = sessionIdsPendingDeletion
+                sessionIdsPendingDeletion = []
+                guard !ids.contains(where: { appState.isSessionStreaming($0) }) else { return }
+                Task { await deleteSessions(ids: ids) }
+            }
+            Button("Cancel", role: .cancel) { sessionIdsPendingDeletion = [] }
+        } message: {
+            Text("This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc.")
         }
     }
 
@@ -106,7 +126,10 @@ struct HistoryListView: View {
                     .foregroundStyle(ClaudeTheme.textTertiary)
             }
             .buttonStyle(.borderless)
-            .help("Delete All")
+            .disabled(deleteAllTargets.isEmpty || deleteAllTargets.contains(where: { appState.isSessionStreaming($0.id) }))
+            .help(deleteAllTargets.contains(where: { appState.isSessionStreaming($0.id) })
+                ? "Wait for running chats to finish before deleting them"
+                : "Delete All Chats")
         }
     }
 
@@ -238,21 +261,34 @@ struct HistoryListView: View {
     private func sessionContextMenu(for ids: Set<String>) -> some View {
         let targets = sessions.filter { ids.contains($0.id) }
         if !targets.isEmpty {
+            let allPinned = targets.allSatisfy { $0.isPinned }
+            Button {
+                Task { await applyPin(to: targets, pin: !allPinned) }
+            } label: {
+                Label(
+                    allPinned ? "Unpin Chat" : "Pin Chat",
+                    systemImage: allPinned ? "pin.slash" : "pin"
+                )
+            }
+
             if targets.count == 1, let only = targets.first {
                 Button {
                     renameText = only.title
                     renamingSession = chatSession(for: only.id)
                 } label: {
-                    Label("Rename", systemImage: "pencil")
+                    Label("Rename Chat", systemImage: "pencil")
+                }
+
+                Button {
+                    if let summary = sessionSummary(for: only.id) {
+                        Task { await appState.revealSessionInFinder(summary) }
+                    }
+                } label: {
+                    Label("Show in Finder", systemImage: "folder")
                 }
             }
 
-            let allPinned = targets.allSatisfy { $0.isPinned }
-            Button {
-                Task { await applyPin(to: targets, pin: !allPinned) }
-            } label: {
-                Label(allPinned ? "Unpin" : "Pin", systemImage: allPinned ? "pin.slash" : "pin")
-            }
+            Divider()
 
             let allCompleted = targets.allSatisfy { $0.isCompleted }
             Button {
@@ -267,18 +303,23 @@ struct HistoryListView: View {
             Divider()
 
             Button(role: .destructive) {
-                Task { await deleteSessions(targets) }
+                sessionIdsPendingDeletion = Set(targets.map(\.id))
             } label: {
                 Label(
-                    targets.count > 1 ? "Delete \(targets.count) Sessions" : "Delete",
+                    targets.count > 1 ? "Delete Chats" : "Delete Chat",
                     systemImage: "trash"
                 )
             }
+            .disabled(targets.contains(where: { appState.isSessionStreaming($0.id) }))
         }
     }
 
+    private func sessionSummary(for id: String) -> ChatSession.Summary? {
+        appState.allSessionSummaries.first(where: { $0.id == id })
+    }
+
     private func chatSession(for id: String) -> ChatSession? {
-        appState.allSessionSummaries.first(where: { $0.id == id })?.makeSession()
+        sessionSummary(for: id)?.makeSession()
     }
 
     private func applyPin(to targets: [DisplaySession], pin: Bool) async {
@@ -295,13 +336,13 @@ struct HistoryListView: View {
         }
     }
 
-    private func deleteSessions(_ targets: [DisplaySession]) async {
-        for target in targets {
-            if let session = chatSession(for: target.id) {
+    private func deleteSessions(ids: Set<String>) async {
+        for id in ids {
+            if let session = chatSession(for: id) {
                 await appState.deleteSession(session, in: windowState)
             }
         }
-        selection = []
+        selection.subtract(ids)
     }
 
     // MARK: - Empty State
@@ -338,6 +379,14 @@ struct HistoryListView: View {
             : allProjectSessions
         guard hideCompleted else { return base }
         return base.filter { !$0.isCompleted || pendingHideIds.contains($0.id) }
+    }
+
+    private var deleteAllTargets: [ChatSession.Summary] {
+        if windowState.isProjectWindow || !showAllProjects {
+            guard let projectId = windowState.selectedProject?.id else { return [] }
+            return appState.allSessionSummaries.filter { $0.projectId == projectId }
+        }
+        return appState.allSessionSummaries
     }
 
     /// Toggle completion. When hiding completed sessions, the just-completed row
@@ -428,11 +477,10 @@ struct HistoryListView: View {
 /// list, so streaming text deltas no longer re-render the whole session list.
 private struct StreamingIndicator: View {
     @Environment(AppState.self) private var appState
-    @Environment(WindowState.self) private var windowState
     let sessionId: String
 
     var body: some View {
-        if appState.isBackgroundStreaming(sessionId, in: windowState) {
+        if appState.isSessionStreaming(sessionId) {
             ProgressView()
                 .controlSize(.mini)
                 .help("Response in progress in the background")

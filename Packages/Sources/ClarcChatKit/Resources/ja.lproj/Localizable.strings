@@ -257,3 +257,10 @@
 
 // MARK: - AskUserQuestionView
 "Question" = "質問";
+
+// MARK: - Thinking
+"thinking.header.streaming" = "思考中…";
+"thinking.header.completed" = "思考過程";
+"thinking.header.duration" = "%@ 思考しました";
+"thinking.header.redacted" = "暗号化された思考（非表示）";
+"thinking.header.segmentCount" = "%@ · %lld セグメント";

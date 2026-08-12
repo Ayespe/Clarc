@@ -8,10 +8,20 @@ private struct StartNewChatKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct OpenQuickSwitcherKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var startNewChat: (() -> Void)? {
         get { self[StartNewChatKey.self] }
         set { self[StartNewChatKey.self] = newValue }
+    }
+
+
+    var openQuickSwitcher: (() -> Void)? {
+        get { self[OpenQuickSwitcherKey.self] }
+        set { self[OpenQuickSwitcherKey.self] = newValue }
     }
 }
 
@@ -28,7 +38,7 @@ struct ProjectWindowValue: Codable, Hashable {
 struct ClarcApp: App {
     @State private var appState = AppState()
     @FocusedValue(\.startNewChat) private var startNewChat
-    private let updateService = UpdateService.shared
+    @FocusedValue(\.openQuickSwitcher) private var openQuickSwitcher
 
     var body: some Scene {
         WindowGroup {
@@ -44,10 +54,11 @@ struct ClarcApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
-            CommandGroup(after: .appInfo) {
-                Button("Check for Updates...") {
-                    updateService.checkForUpdates()
+            CommandMenu("Navigate") {
+                Button("Open Quick Switcher") {
+                    openQuickSwitcher?()
                 }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
             }
             CommandMenu("Theme") {
                 ForEach(AppTheme.allCases) { theme in
@@ -146,7 +157,7 @@ struct ProjectWindowRoot: View {
                 await appState.initializeWindow(windowState, selectingProjectId: projectId)
                 // Apply pending notification navigation (new window case)
                 if let sessionId = appState.pendingNotificationSession.removeValue(forKey: projectId) {
-                    windowState.currentSessionId = sessionId
+                    appState.selectSession(id: sessionId, in: windowState)
                 }
             }
             .onAppear { appState.registerOpenProjectWindow(projectId) }
@@ -154,7 +165,7 @@ struct ProjectWindowRoot: View {
             // Apply pending notification navigation (already-open window case)
             .onChange(of: appState.pendingNotificationSession[projectId]) { _, sessionId in
                 guard let sessionId else { return }
-                windowState.currentSessionId = sessionId
+                appState.selectSession(id: sessionId, in: windowState)
                 appState.pendingNotificationSession.removeValue(forKey: projectId)
             }
     }

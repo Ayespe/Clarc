@@ -23,6 +23,9 @@
 "Used for new sessions. You can override the model per session from the toolbar." = "用於新會話。你可以在工具列中按會話單獨變更模型。";
 "Default Permission Mode" = "預設權限模式";
 "Used for new sessions. You can override the permission mode per session from the toolbar." = "用於新會話。你可以在工具列中按會話單獨變更權限模式。";
+"Thinking Display" = "思考過程顯示";
+"thinking.auto.expand.desc" = "控制串流回應期間是否自動展開思考過程。手動展開或摺疊始終優先。";
+"Auto-expand thinking while Claude is working" = "Claude 工作時自動展開思考過程";
 "Default Effort Level" = "預設工作量等級";
 "Used for new sessions. You can override the effort level per session from the toolbar." = "用於新會話。你可以在工具列中按會話單獨變更工作量等級。";
 "Font Size" = "字型大小";
@@ -59,6 +62,14 @@
 "Select Model" = "選擇模型";
 "Select Effort Level" = "選擇工作量等級";
 "↑↓ Select  ↵ Confirm  esc Cancel" = "↑↓ 選擇  ↵ 確認  esc 取消";
+"Quick Switcher" = "快速切換";
+"Open Quick Switcher" = "開啟快速切換";
+"Search projects and chats..." = "搜尋專案和聊天...";
+"No matching projects or chats" = "沒有相符的專案或聊天";
+"Project" = "專案";
+"Chat" = "聊天";
+"Pinned" = "已釘選";
+"Running" = "執行中";
 
 // MARK: - SkillMarketView
 "Refresh" = "重新整理";
@@ -109,6 +120,17 @@
 "Delete Project" = "刪除專案";
 "This will remove the project from Clarc. The files on disk will not be deleted." = "這將從 Clarc 中移除該專案。磁碟上的檔案不會被刪除。";
 "Project name" = "專案名稱";
+"Pin Project" = "釘選專案";
+"Unpin Project" = "取消釘選專案";
+"Remove Project" = "移除專案";
+"Remove \"%@\" from Clarc?" = "要從 Clarc 中移除「%@」嗎？";
+"Pin Chat" = "釘選聊天";
+"Unpin Chat" = "取消釘選聊天";
+"Rename Chat" = "重新命名聊天";
+"Chat name" = "聊天名稱";
+"Delete Chat?" = "刪除聊天？";
+"Delete Chat" = "刪除聊天";
+"This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc." = "此操作會刪除對應的 Claude Code 聊天記錄，無法透過 Clarc 復原。";
 
 // MARK: - HistoryListView
 "Show current project only" = "僅顯示目前專案";
@@ -130,6 +152,9 @@
 "Unpin" = "取消釘選";
 "Pin" = "釘選";
 "No chat history" = "無會話";
+"No Projects" = "暫無專案";
+"Show More" = "顯示更多";
+"Show Less" = "收起";
 
 // MARK: - GitStatusView
 "Checking..." = "正在檢查...";
@@ -142,6 +167,12 @@
 "No local branches" = "無本機分支";
 "No remote branches" = "無遠端分支";
 "Switch Branch" = "切換分支";
+"Changes" = "變更";
+"All Changes" = "所有變更";
+"Last Turn" = "本輪變更";
+"Files Touched This Turn" = "本輪觸及檔案";
+"No files touched this turn" = "本輪未觸及檔案";
+"Only files explicitly reported by Claude editing tools are shown." = "僅顯示 Claude 編輯工具明確回報過的檔案。";
 
 // MARK: - FileInspectorView
 "Preview" = "預覽";
@@ -156,8 +187,8 @@
 
 // MARK: - ChatToolbarControls
 "Permission Mode" = "權限模式";
-"Ask" = "詢問";
-"Accept Edits" = "接受編輯";
+"Ask" = "手動確認";
+"Accept Edits" = "允許編輯";
 "Plan" = "計畫模式";
 "Auto" = "自動模式";
 "Bypass" = "略過權限";

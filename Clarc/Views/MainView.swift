@@ -9,22 +9,21 @@ struct MainView: View {
     @State private var showGitHubSheet = false
     @State private var showFilePicker = false
     @Environment(\.openSettings) private var openSettings
-    @State private var sidebarTab: SidebarTab = .history
+    @State private var sidebarTab: SidebarTab = .projects
     @State private var fileSearchTrigger = false
     @State private var inspectorStarted = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var projectToDelete: Project? = nil
-    @State private var projectToRename: Project? = nil
-    @State private var renameText: String = ""
 
     enum SidebarTab: String, CaseIterable {
-        case history = "History"
+        case projects = "Projects"
+        case sessions = "History"
         case files = "Files"
 
         var icon: String {
             switch self {
-            case .files: "folder"
-            case .history: "clock"
+            case .projects: "folder"
+            case .files: "doc.text"
+            case .sessions: "clock"
             }
         }
     }
@@ -75,6 +74,12 @@ struct MainView: View {
                                     removal: .opacity
                                 ))
                         }
+                    }
+                }
+                .overlay {
+                    if windowState.showQuickSwitcher {
+                        QuickSwitcherView()
+                            .zIndex(20)
                     }
                 }
                 .id(appState.themeRevision)
@@ -135,24 +140,27 @@ struct MainView: View {
 
     private var sidebarContent: some View {
         VStack(spacing: 0) {
-            if windowState.selectedProject != nil {
-                ClaudeSegmentedControl(selection: $sidebarTab)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+            ClaudeSegmentedControl(selection: $sidebarTab)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
 
-                switch sidebarTab {
-                case .files:
-                    FileTreeView(projectPath: windowState.selectedProject!.path, searchTrigger: $fileSearchTrigger)
-                case .history:
-                    HistoryListView()
+            switch sidebarTab {
+            case .projects:
+                ProjectListView()
+            case .files:
+                if let project = windowState.selectedProject {
+                    FileTreeView(projectPath: project.path, searchTrigger: $fileSearchTrigger)
+                } else {
+                    Text("Select a Project")
+                        .font(.system(size: ClaudeTheme.size(12)))
+                        .foregroundStyle(ClaudeTheme.textTertiary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } else {
+            case .sessions:
                 HistoryListView()
             }
 
-            if windowState.selectedProject != nil {
-                SidebarTabShortcuts(sidebarTab: $sidebarTab, fileSearchTrigger: $fileSearchTrigger, columnVisibility: $columnVisibility)
-            }
+            SidebarTabShortcuts(sidebarTab: $sidebarTab, fileSearchTrigger: $fileSearchTrigger, columnVisibility: $columnVisibility)
 
             ClaudeThemeDivider()
 
@@ -167,66 +175,12 @@ struct MainView: View {
         }
     }
 
-    // MARK: - Chat Toolbar Area (moved from old ChatView)
-
-    @Environment(\.openWindow) private var openWindow
-
-    private var chatToolbarArea: some View {
-        HStack(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    // isSelected is computed here and passed as a value so ProjectTabButton.body
-                    // does not access windowState.selectedProject — only the 2 changed buttons re-render.
-                    ForEach(appState.projects) { project in
-                        ProjectTabButton(
-                            project: project,
-                            isSelected: windowState.selectedProject?.id == project.id,
-                            projectToDelete: $projectToDelete,
-                            projectToRename: $projectToRename,
-                            renameText: $renameText
-                        )
-                    }
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(ClaudeTheme.surfaceElevated)
-        .confirmationDialog(
-            "Delete \"\(projectToDelete?.name ?? "")\"?",
-            isPresented: Binding(
-                get: { projectToDelete != nil },
-                set: { if !$0 { projectToDelete = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                if let project = projectToDelete {
-                    Task { await appState.deleteProject(project, in: windowState) }
-                }
-                projectToDelete = nil
-            }
-            Button("Cancel", role: .cancel) { projectToDelete = nil }
-        } message: {
-            Text("This will remove the project from Clarc. The files on disk will not be deleted.")
-        }
-        .sheet(item: $projectToRename) { project in
-            RenameProjectSheet(name: $renameText) {
-                Task { await appState.renameProject(project, to: renameText) }
-            }
-        }
-    }
-
     // MARK: - Detail
 
     @AppStorage("inspectorBottomHeight") private var bottomInspectorHeight: Double = 280
 
     private var chatCore: some View {
         VStack(spacing: 0) {
-            chatToolbarArea
-            ClaudeThemeDivider()
             ChatView {
                 ChatToolbarControls(placement: .composer)
             }
@@ -295,6 +249,9 @@ struct MainView: View {
         .focusedValue(\.startNewChat) {
             appState.startNewChat(in: windowState)
         }
+        .focusedValue(\.openQuickSwitcher) {
+            windowState.showQuickSwitcher = true
+        }
         // Toolbar is in an isolated struct so NSToolbar does not re-layout on project switches.
         .background {
             DetailToolbar()
@@ -343,59 +300,6 @@ struct DetailToolbar: View {
                     .help("Settings")
                 }
             }
-    }
-}
-
-// MARK: - Project Tab Button (isolated — isSelected passed as value, body reads no @Observable properties)
-
-struct ProjectTabButton: View {
-    @Environment(AppState.self) private var appState
-    @Environment(WindowState.self) private var windowState
-    @Environment(\.openWindow) private var openWindow
-
-    let project: Project
-    let isSelected: Bool
-    @Binding var projectToDelete: Project?
-    @Binding var projectToRename: Project?
-    @Binding var renameText: String
-
-    var body: some View {
-        Button {
-            appState.selectProject(project, in: windowState)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: ClaudeTheme.size(11)))
-                Text(project.name)
-                    .font(.system(size: ClaudeTheme.size(13), weight: .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(isSelected ? ClaudeTheme.textOnAccent : ClaudeTheme.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                isSelected ? ClaudeTheme.accent : ClaudeTheme.surfaceSecondary,
-                in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-            )
-        }
-        .buttonStyle(.plain)
-        .onTapGesture(count: 2) {
-            openWindow(id: "project-window", value: ProjectWindowValue(projectId: project.id, instanceId: UUID()))
-        }
-        .contextMenu {
-            Button {
-                renameText = project.name
-                projectToRename = project
-            } label: {
-                Label("Rename Project", systemImage: "pencil")
-            }
-            Divider()
-            Button(role: .destructive) {
-                projectToDelete = project
-            } label: {
-                Label("Delete Project", systemImage: "trash")
-            }
-        }
     }
 }
 
@@ -624,10 +528,11 @@ private struct InspectorIconButton: View {
 
 struct ClaudeSegmentedControl: View {
     @Binding var selection: MainView.SidebarTab
+    var tabs: [MainView.SidebarTab] = MainView.SidebarTab.allCases
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(MainView.SidebarTab.allCases, id: \.self) { tab in
+            ForEach(tabs, id: \.self) { tab in
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { selection = tab }
                 } label: {
@@ -660,6 +565,8 @@ struct SidebarTabShortcuts: View {
     @Binding var sidebarTab: MainView.SidebarTab
     @Binding var fileSearchTrigger: Bool
     @Binding var columnVisibility: NavigationSplitViewVisibility
+    var firstTab: MainView.SidebarTab = .projects
+    var secondTab: MainView.SidebarTab = .sessions
 
     var body: some View {
         Color.clear
@@ -674,14 +581,14 @@ struct SidebarTabShortcuts: View {
 
                 Button("") {
                     columnVisibility = .all
-                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = .history }
+                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = firstTab }
                 }
                 .keyboardShortcut("1", modifiers: .command)
                 .hidden()
 
                 Button("") {
                     columnVisibility = .all
-                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = .files }
+                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = secondTab }
                 }
                 .keyboardShortcut("2", modifiers: .command)
                 .hidden()
@@ -733,41 +640,41 @@ struct ChatToolbarControls: View {
                         Button {
                             appState.setSessionPermissionMode(mode, in: windowState)
                         } label: {
-                            Text(LocalizedStringKey(mode.displayName))
+                            Text(AppState.permissionModeDisplayName(mode))
                             if effectiveMode == mode { Image(systemName: "checkmark") }
                         }
                     }
                 }
             } label: {
                 controlLabel(
-                    title: effectiveMode.displayName,
+                    title: AppState.permissionModeDisplayName(effectiveMode),
                     isAccent: placement == .composer
                 )
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Permission mode: \(effectiveMode.displayName)")
+            .help(AppState.permissionModeTooltip(effectiveMode))
 
             Menu {
                 Section("Model Picker") {
-                    ForEach(AppState.availableModels, id: \.self) { model in
+                    ForEach(appState.availableModels, id: \.self) { model in
                         Button {
                             appState.setSessionModel(model, in: windowState)
                         } label: {
-                            Text(AppState.modelDisplayName(model))
+                            Text(appState.modelDisplayName(model))
                             if effectiveModel == model { Image(systemName: "checkmark") }
                         }
                     }
                 }
             } label: {
                 controlLabel(
-                    title: AppState.modelDisplayName(effectiveModel),
+                    title: appState.modelDisplayName(effectiveModel),
                     isAccent: false
                 )
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Model: \(AppState.modelDisplayName(effectiveModel))")
+            .help("Model: \(appState.modelDisplayName(effectiveModel))")
 
             Menu {
                 Section("Effort Picker") {
@@ -914,14 +821,14 @@ struct ModelPickerSheet: View {
                 .foregroundStyle(ClaudeTheme.textPrimary)
 
             VStack(spacing: 8) {
-                ForEach(AppState.availableModels.indices, id: \.self) { index in
-                    let model = AppState.availableModels[index]
+                ForEach(appState.availableModels.indices, id: \.self) { index in
+                    let model = appState.availableModels[index]
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(AppState.modelDisplayName(model))
+                            Text(appState.modelDisplayName(model))
                                 .font(.system(size: ClaudeTheme.size(13), weight: .medium))
                                 .foregroundStyle(ClaudeTheme.textPrimary)
-                            Text(AppState.modelDescription(model))
+                            Text(appState.modelDescription(model))
                                 .font(.system(size: ClaudeTheme.size(11)))
                                 .foregroundStyle(ClaudeTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -954,15 +861,16 @@ struct ModelPickerSheet: View {
         .focusable()
         .focused($isFocused)
         .onKeyPress(.upArrow) {
-            selectedIndex = (selectedIndex - 1 + AppState.availableModels.count) % AppState.availableModels.count
+            selectedIndex = (selectedIndex - 1 + appState.availableModels.count) % appState.availableModels.count
             return .handled
         }
         .onKeyPress(.downArrow) {
-            selectedIndex = (selectedIndex + 1) % AppState.availableModels.count
+            selectedIndex = (selectedIndex + 1) % appState.availableModels.count
             return .handled
         }
         .onKeyPress(.return) {
-            appState.setSessionModel(AppState.availableModels[selectedIndex], in: windowState)
+            guard appState.availableModels.indices.contains(selectedIndex) else { return .handled }
+            appState.setSessionModel(appState.availableModels[selectedIndex], in: windowState)
             dismiss()
             return .handled
         }
@@ -971,7 +879,7 @@ struct ModelPickerSheet: View {
             return .handled
         }
         .onAppear {
-            selectedIndex = AppState.availableModels.firstIndex(of: effectiveModel) ?? 0
+            selectedIndex = appState.availableModels.firstIndex(of: effectiveModel) ?? 0
             DispatchQueue.main.async { isFocused = true }
         }
     }

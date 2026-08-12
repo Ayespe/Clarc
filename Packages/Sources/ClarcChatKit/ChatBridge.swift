@@ -19,6 +19,15 @@ public final class ChatBridge {
     public var modelDisplayName: String = ""
     public var sessionStats: ChatSessionStats = ChatSessionStats()
     public var autoPreviewSettings: AttachmentAutoPreviewSettings = AttachmentAutoPreviewSettings()
+    public var autoExpandThinking: Bool = false
+
+    /// Per-window, presentation-only disclosure choices for thinking groups.
+    ///
+    /// Keeping these outside `ThinkingBlockView` preserves a user's manual choice
+    /// when an active response moves from the streaming subtree into the settled
+    /// message list. The keys are stable block IDs and are never persisted to the
+    /// Claude session or Clarc's session sidecar.
+    public var thinkingDisclosureOverrides: [String: Bool] = [:]
 
     // MARK: - Action Handlers (set up by the app target)
 

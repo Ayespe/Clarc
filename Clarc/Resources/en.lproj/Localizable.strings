@@ -23,6 +23,9 @@
 "Used for new sessions. You can override the model per session from the toolbar." = "Used for new sessions. You can override the model per session from the toolbar.";
 "Default Permission Mode" = "Default Permission Mode";
 "Used for new sessions. You can override the permission mode per session from the toolbar." = "Used for new sessions. You can override the permission mode per session from the toolbar.";
+"Thinking Display" = "Thinking Display";
+"thinking.auto.expand.desc" = "Controls whether thinking opens automatically during streaming. Manual expand or collapse always takes priority.";
+"Auto-expand thinking while Claude is working" = "Auto-expand thinking while Claude is working";
 "Default Effort Level" = "Default Effort Level";
 "Used for new sessions. You can override the effort level per session from the toolbar." = "Used for new sessions. You can override the effort level per session from the toolbar.";
 "Font Size" = "Font Size";
@@ -59,6 +62,14 @@
 "Select Model" = "Select Model";
 "Select Effort Level" = "Select Effort Level";
 "↑↓ Select  ↵ Confirm  esc Cancel" = "↑↓ Select  ↵ Confirm  esc Cancel";
+"Quick Switcher" = "Quick Switcher";
+"Open Quick Switcher" = "Open Quick Switcher";
+"Search projects and chats..." = "Search projects and chats...";
+"No matching projects or chats" = "No matching projects or chats";
+"Project" = "Project";
+"Chat" = "Chat";
+"Pinned" = "Pinned";
+"Running" = "Running";
 
 // MARK: - SkillMarketView
 "Refresh" = "Refresh";
@@ -109,6 +120,17 @@
 "Delete Project" = "Delete Project";
 "This will remove the project from Clarc. The files on disk will not be deleted." = "This will remove the project from Clarc. The files on disk will not be deleted.";
 "Project name" = "Project name";
+"Pin Project" = "Pin Project";
+"Unpin Project" = "Unpin Project";
+"Remove Project" = "Remove Project";
+"Remove \"%@\" from Clarc?" = "Remove \"%@\" from Clarc?";
+"Pin Chat" = "Pin Chat";
+"Unpin Chat" = "Unpin Chat";
+"Rename Chat" = "Rename Chat";
+"Chat name" = "Chat name";
+"Delete Chat?" = "Delete Chat?";
+"Delete Chat" = "Delete Chat";
+"This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc." = "This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc.";
 
 // MARK: - HistoryListView
 "Show current project only" = "Show current project only";
@@ -130,6 +152,9 @@
 "Unpin" = "Unpin";
 "Pin" = "Pin";
 "No chat history" = "No sessions";
+"No Projects" = "No projects";
+"Show More" = "Show more";
+"Show Less" = "Show less";
 
 // MARK: - GitStatusView
 "Checking..." = "Checking...";
@@ -142,6 +167,12 @@
 "No local branches" = "No local branches";
 "No remote branches" = "No remote branches";
 "Switch Branch" = "Switch Branch";
+"Changes" = "Changes";
+"All Changes" = "All Changes";
+"Last Turn" = "Last Turn";
+"Files Touched This Turn" = "Files Touched This Turn";
+"No files touched this turn" = "No files touched this turn";
+"Only files explicitly reported by Claude editing tools are shown." = "Only files explicitly reported by Claude editing tools are shown.";
 
 // MARK: - FileInspectorView
 "Preview" = "Preview";
@@ -156,11 +187,11 @@
 
 // MARK: - ChatToolbarControls
 "Permission Mode" = "Permission Mode";
-"Ask" = "Ask";
-"Accept Edits" = "Accept Edits";
-"Plan" = "Plan";
-"Auto" = "Auto";
-"Bypass" = "Bypass";
+"Ask" = "Manual mode";
+"Accept Edits" = "Accept edits";
+"Plan" = "Plan mode";
+"Auto" = "Auto mode";
+"Bypass" = "Bypass permissions";
 "Model Picker" = "Model Picker";
 "Effort Picker" = "Effort Picker";
 "Auto Effort" = "Auto Effort";

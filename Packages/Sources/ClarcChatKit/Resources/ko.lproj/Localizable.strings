@@ -258,3 +258,9 @@
 // MARK: - AskUserQuestionView
 "Question" = "질문";
 
+// MARK: - Thinking
+"thinking.header.streaming" = "생각하는 중…";
+"thinking.header.completed" = "사고 과정";
+"thinking.header.duration" = "%@ 동안 생각함";
+"thinking.header.redacted" = "암호화된 사고 과정(숨김)";
+"thinking.header.segmentCount" = "%@ · %lld개 구간";

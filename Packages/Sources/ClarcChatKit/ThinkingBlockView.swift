@@ -1,30 +1,71 @@
 import SwiftUI
 import ClarcCore
 
-/// Renders an assistant `thinking` block. Auto-expands while it is streaming
-/// so the user can read the reasoning live; once a duration is recorded the
-/// view stays expanded if the user hasn't interacted, then auto-collapses on
-/// the next render — clicking the header overrides either state and sticks.
-struct ThinkingBlockView: View {
-    let block: MessageBlock
-    let isMessageStreaming: Bool
+enum ThinkingDisclosurePolicy {
+    static func isExpanded(
+        override: Bool?,
+        autoExpandWhileStreaming: Bool,
+        isStreaming: Bool
+    ) -> Bool {
+        override ?? (autoExpandWhileStreaming && isStreaming)
+    }
+}
 
-    @State private var userToggle: Bool? = nil
+/// Renders one presentation-level run of adjacent thinking blocks. The group is
+/// collapsed by default; automatic expansion is an explicit global preference,
+/// while a user's per-group choice always wins.
+struct ThinkingBlockView: View {
+    let group: ThinkingBlockGroup
+    let isMessageStreaming: Bool
+    let autoExpandWhileStreaming: Bool
+    @Binding var disclosureOverride: Bool?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isCopied = false
     @State private var isHovering = false
 
-    private var isThisBlockStreaming: Bool {
-        isMessageStreaming && block.thinkingDuration == nil && !block.isThinkingRedacted
+    private var blocks: [MessageBlock] { group.blocks }
+
+    private var isRedacted: Bool {
+        blocks.count == 1 && blocks[0].isThinkingRedacted
+    }
+
+    private var isGroupStreaming: Bool {
+        guard isMessageStreaming, !isRedacted, let last = blocks.last else { return false }
+        return last.thinkingDuration == nil
     }
 
     private var isExpanded: Bool {
-        userToggle ?? isThisBlockStreaming
+        ThinkingDisclosurePolicy.isExpanded(
+            override: disclosureOverride,
+            autoExpandWhileStreaming: autoExpandWhileStreaming,
+            isStreaming: isGroupStreaming
+        )
+    }
+
+    private var visibleThinkingBlocks: [MessageBlock] {
+        blocks.filter { !($0.thinking ?? "").isEmpty }
+    }
+
+    private var thinkingText: String {
+        visibleThinkingBlocks.compactMap(\.thinking).joined(separator: "\n\n")
+    }
+
+    /// A total is only truthful when every segment has a measured duration.
+    private var aggregateDuration: TimeInterval? {
+        guard !blocks.isEmpty,
+              blocks.allSatisfy({ !$0.isThinkingRedacted && $0.thinkingDuration != nil }) else {
+            return nil
+        }
+        return blocks.compactMap(\.thinkingDuration).reduce(0, +)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if isExpanded { body(content: thinkingText) }
+            if isExpanded {
+                thinkingBody
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
@@ -35,34 +76,27 @@ struct ThinkingBlockView: View {
                 .strokeBorder(ClaudeTheme.border, lineWidth: 0.5)
         )
         .onHover { isHovering = $0 }
-        .onChange(of: block.thinkingDuration) { _, newValue in
-            // Auto-collapse on stream completion, but only if the user has not
-            // already expressed a preference by clicking the header.
-            if newValue != nil && userToggle == nil {
-                userToggle = false
-            }
-        }
-    }
-
-    private var thinkingText: String {
-        block.thinking ?? ""
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isExpanded)
     }
 
     private var header: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                userToggle = !isExpanded
+            let toggle = { disclosureOverride = !isExpanded }
+            if reduceMotion {
+                toggle()
+            } else {
+                withAnimation(.easeInOut(duration: 0.2), toggle)
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: block.isThinkingRedacted ? "lock.fill" : "brain")
+                Image(systemName: isRedacted ? "lock.fill" : "brain")
                     .font(.system(size: ClaudeTheme.messageSize(11)))
                     .foregroundStyle(ClaudeTheme.textSecondary)
-                headerLabel
+                Text(headerText)
                     .font(.system(size: ClaudeTheme.messageSize(12), weight: .medium))
                     .foregroundStyle(ClaudeTheme.textSecondary)
                 Spacer(minLength: 6)
-                if !block.isThinkingRedacted {
+                if !isRedacted {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: ClaudeTheme.messageSize(9), weight: .semibold))
                         .foregroundStyle(ClaudeTheme.textTertiary)
@@ -73,26 +107,35 @@ struct ThinkingBlockView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(block.isThinkingRedacted)
+        .disabled(isRedacted)
     }
 
-    @ViewBuilder
-    private var headerLabel: some View {
-        if block.isThinkingRedacted {
-            Text("Encrypted thought (redacted)", bundle: .module)
-        } else if isThisBlockStreaming {
-            Text("Thinking…", bundle: .module)
-        } else if let duration = block.thinkingDuration {
-            Text(String(format: String(localized: "Thought for %@", bundle: .module),
-                        duration.formattedDuration))
+    private var headerText: String {
+        let base: String
+        if isRedacted {
+            base = String(localized: "thinking.header.redacted", bundle: .module)
+        } else if isGroupStreaming {
+            base = String(localized: "thinking.header.streaming", bundle: .module)
+        } else if let aggregateDuration {
+            base = String(
+                format: String(localized: "thinking.header.duration", bundle: .module),
+                aggregateDuration.formattedDuration
+            )
         } else {
-            Text("Thought", bundle: .module)
+            base = String(localized: "thinking.header.completed", bundle: .module)
         }
+
+        guard blocks.count > 1 else { return base }
+        return String(
+            format: String(localized: "thinking.header.segmentCount", bundle: .module),
+            base,
+            blocks.count
+        )
     }
 
     @ViewBuilder
-    private func body(content: String) -> some View {
-        if content.isEmpty {
+    private var thinkingBody: some View {
+        if visibleThinkingBlocks.isEmpty {
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: 0) {
@@ -103,13 +146,22 @@ struct ThinkingBlockView: View {
                         .fill(ClaudeTheme.border)
                         .frame(width: 2)
                         .padding(.vertical, 2)
-                    Text(content)
-                        .font(.system(size: ClaudeTheme.messageSize(12)))
-                        .italic()
-                        .foregroundStyle(ClaudeTheme.textSecondary)
-                        .lineSpacing(3)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(visibleThinkingBlocks.enumerated()), id: \.element.id) { index, block in
+                            if index > 0 {
+                                Divider()
+                                    .overlay(ClaudeTheme.borderSubtle)
+                            }
+                            Text(block.thinking ?? "")
+                                .font(.system(size: ClaudeTheme.messageSize(12)))
+                                .italic()
+                                .foregroundStyle(ClaudeTheme.textSecondary)
+                                .lineSpacing(3)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -131,7 +183,6 @@ struct ThinkingBlockView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(6)
-                    .transition(.opacity.animation(.easeInOut(duration: 0.15)))
                 }
             }
         }

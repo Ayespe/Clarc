@@ -387,6 +387,8 @@ struct ChatSettingsTab: View {
                 Divider()
                 effortSection
                 Divider()
+                thinkingSection
+                Divider()
                 focusModeSection
                 Divider()
                 autoPreviewSection
@@ -408,15 +410,15 @@ struct ChatSettingsTab: View {
                 .foregroundStyle(.secondary)
 
             Picker("", selection: selectedModel) {
-                ForEach(AppState.availableModels, id: \.self) { model in
-                    Text(AppState.modelDisplayName(model)).tag(model)
+                ForEach(appState.availableModels, id: \.self) { model in
+                    Text(appState.modelDisplayName(model)).tag(model)
                 }
             }
             .labelsHidden()
             .pickerStyle(.menu)
             .fixedSize()
 
-            Text(AppState.modelDescription(selectedModel.wrappedValue))
+            Text(appState.modelDescription(selectedModel.wrappedValue))
                 .font(.system(size: ClaudeTheme.size(11)))
                 .foregroundStyle(.secondary)
         }
@@ -434,9 +436,12 @@ struct ChatSettingsTab: View {
                 .font(.system(size: ClaudeTheme.size(11)))
                 .foregroundStyle(.secondary)
 
-            Picker("", selection: $appState.permissionMode) {
+            Picker("", selection: Binding(
+                get: { appState.permissionMode },
+                set: { appState.setDefaultPermissionMode($0) }
+            )) {
                 ForEach(PermissionMode.allCases, id: \.self) { mode in
-                    Text(LocalizedStringKey(mode.displayName)).tag(mode)
+                    Text(AppState.permissionModeDisplayName(mode)).tag(mode)
                 }
             }
             .labelsHidden()
@@ -446,6 +451,24 @@ struct ChatSettingsTab: View {
             Text(AppState.permissionModeDescription(appState.permissionMode))
                 .font(.system(size: ClaudeTheme.size(11)))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Thinking Section
+
+    private var thinkingSection: some View {
+        @Bindable var appState = appState
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Thinking Display")
+                .font(.system(size: ClaudeTheme.size(13), weight: .semibold))
+
+            Text("thinking.auto.expand.desc")
+                .font(.system(size: ClaudeTheme.size(11)))
+                .foregroundStyle(.secondary)
+
+            Toggle("Auto-expand thinking while Claude is working", isOn: $appState.autoExpandThinking)
+                .toggleStyle(.switch)
+                .fixedSize()
         }
     }
 

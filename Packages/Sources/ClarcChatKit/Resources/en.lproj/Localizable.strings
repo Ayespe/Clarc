@@ -32,3 +32,10 @@
 "isTerminalCommand: true runs the message as a terminal command instead of sending it to chat." = "isTerminalCommand: true runs the message as a terminal command instead of sending it to chat.";
 "Shortcut button label" = "Shortcut button label";
 "Message sent to Claude or command run in terminal" = "Message sent to Claude or command run in terminal";
+
+// MARK: - Thinking
+"thinking.header.streaming" = "Thinking…";
+"thinking.header.completed" = "Thought";
+"thinking.header.duration" = "Thought for %@";
+"thinking.header.redacted" = "Encrypted thought (redacted)";
+"thinking.header.segmentCount" = "%@ · %lld segments";

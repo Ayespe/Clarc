@@ -26,9 +26,5 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
-	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/ttnear/Clarc/main/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>o1+OjC4eJrHnvmfwRxGPhH8OQFD21WYlxkFndh+4J0M=</string>
 </dict>
 </plist>

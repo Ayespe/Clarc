@@ -6,7 +6,7 @@ import ClarcChatKit
 struct ProjectWindowView: View {
     @Environment(AppState.self) private var appState
     @Environment(WindowState.self) private var windowState
-    @State private var sidebarTab: MainView.SidebarTab = .history
+    @State private var sidebarTab: MainView.SidebarTab = .sessions
     @State private var fileSearchTrigger = false
     @State private var inspectorStarted = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -63,6 +63,12 @@ struct ProjectWindowView: View {
             .keyboardShortcut("3", modifiers: .command)
             .hidden()
         }
+        .overlay {
+            if windowState.showQuickSwitcher {
+                QuickSwitcherView()
+                    .zIndex(20)
+            }
+        }
         .id(appState.themeRevision)
         .navigationTitle(windowState.selectedProject?.name ?? "Project")
         .onChange(of: windowState.showInspector) { _, isShowing in
@@ -81,22 +87,30 @@ struct ProjectWindowView: View {
     private var sidebarContent: some View {
         VStack(spacing: 0) {
             // Sidebar tabs (History/Files)
-            ClaudeSegmentedControl(selection: $sidebarTab)
+            ClaudeSegmentedControl(selection: $sidebarTab, tabs: [.sessions, .files])
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
 
             ClaudeThemeDivider()
 
             switch sidebarTab {
+            case .projects:
+                ProjectListView()
             case .files:
                 if let project = windowState.selectedProject {
                     FileTreeView(projectPath: project.path, searchTrigger: $fileSearchTrigger)
                 }
-            case .history:
+            case .sessions:
                 HistoryListView()
             }
 
-            SidebarTabShortcuts(sidebarTab: $sidebarTab, fileSearchTrigger: $fileSearchTrigger, columnVisibility: $columnVisibility)
+            SidebarTabShortcuts(
+                sidebarTab: $sidebarTab,
+                fileSearchTrigger: $fileSearchTrigger,
+                columnVisibility: $columnVisibility,
+                firstTab: .sessions,
+                secondTab: .files
+            )
 
             ClaudeThemeDivider()
 
@@ -108,39 +122,12 @@ struct ProjectWindowView: View {
         .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 360)
     }
 
-    // MARK: - Chat Toolbar Area
-
-    private var chatToolbarArea: some View {
-        HStack(spacing: 12) {
-            if let project = windowState.selectedProject {
-                HStack(spacing: 5) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: ClaudeTheme.size(11)))
-                    Text(project.name)
-                        .font(.system(size: ClaudeTheme.size(13), weight: .semibold))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(ClaudeTheme.textOnAccent)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(ClaudeTheme.accent, in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(ClaudeTheme.surfaceElevated)
-    }
-
     // MARK: - Detail
 
     @AppStorage("inspectorBottomHeight") private var bottomInspectorHeight: Double = 280
 
     private var chatCore: some View {
         VStack(spacing: 0) {
-            chatToolbarArea
-            ClaudeThemeDivider()
             ChatView {
                 ChatToolbarControls(placement: .composer)
             }
@@ -195,6 +182,9 @@ struct ProjectWindowView: View {
         }
         .focusedValue(\.startNewChat) {
             appState.startNewChat(in: windowState)
+        }
+        .focusedValue(\.openQuickSwitcher) {
+            windowState.showQuickSwitcher = true
         }
     }
 

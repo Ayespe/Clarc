@@ -23,6 +23,9 @@
 "Used for new sessions. You can override the model per session from the toolbar." = "새 세션의 기본 모델입니다. 툴바에서 세션별로 모델을 변경할 수 있습니다.";
 "Default Permission Mode" = "기본 권한 모드 (Permission Mode)";
 "Used for new sessions. You can override the permission mode per session from the toolbar." = "새 세션의 기본 권한 모드입니다. 툴바에서 세션별로 변경할 수 있습니다.";
+"Thinking Display" = "사고 과정 표시";
+"thinking.auto.expand.desc" = "스트리밍 중 사고 과정을 자동으로 펼칠지 설정합니다. 사용자가 직접 펼치거나 접은 상태가 항상 우선합니다.";
+"Auto-expand thinking while Claude is working" = "Claude 작업 중 사고 과정 자동 펼치기";
 "Default Effort Level" = "기본 작업량 수준 (Effort Level)";
 "Used for new sessions. You can override the effort level per session from the toolbar." = "새 세션의 기본 Effort 수준입니다. 툴바에서 세션별로 변경할 수 있습니다.";
 "Font Size" = "폰트 크기";
@@ -59,6 +62,14 @@
 "Select Model" = "모델 선택";
 "Select Effort Level" = "Effort 수준 선택";
 "↑↓ Select  ↵ Confirm  esc Cancel" = "↑↓ 선택  ↵ 확인  esc 취소";
+"Quick Switcher" = "빠른 전환";
+"Open Quick Switcher" = "빠른 전환 열기";
+"Search projects and chats..." = "프로젝트와 채팅 검색...";
+"No matching projects or chats" = "일치하는 프로젝트나 채팅이 없습니다";
+"Project" = "프로젝트";
+"Chat" = "채팅";
+"Pinned" = "고정됨";
+"Running" = "실행 중";
 
 // MARK: - SkillMarketView
 "Refresh" = "새로고침";
@@ -109,6 +120,17 @@
 "Delete Project" = "프로젝트 삭제";
 "This will remove the project from Clarc. The files on disk will not be deleted." = "Clarc에서 프로젝트가 제거됩니다. 디스크의 파일은 삭제되지 않습니다.";
 "Project name" = "프로젝트 이름";
+"Pin Project" = "프로젝트 고정";
+"Unpin Project" = "프로젝트 고정 해제";
+"Remove Project" = "프로젝트 제거";
+"Remove \"%@\" from Clarc?" = "Clarc에서 ‘%@’ 프로젝트를 제거할까요?";
+"Pin Chat" = "채팅 고정";
+"Unpin Chat" = "채팅 고정 해제";
+"Rename Chat" = "채팅 이름 변경";
+"Chat name" = "채팅 이름";
+"Delete Chat?" = "채팅을 삭제할까요?";
+"Delete Chat" = "채팅 삭제";
+"This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc." = "해당 Claude Code 채팅 기록이 삭제됩니다. Clarc에서는 복구할 수 없습니다.";
 
 // MARK: - HistoryListView
 "Show current project only" = "현재 프로젝트만 표시";
@@ -130,6 +152,9 @@
 "Unpin" = "고정 해제";
 "Pin" = "고정";
 "No chat history" = "세션 없음";
+"No Projects" = "프로젝트 없음";
+"Show More" = "더 보기";
+"Show Less" = "접기";
 
 // MARK: - GitStatusView
 "Checking..." = "확인 중...";
@@ -142,6 +167,12 @@
 "No local branches" = "로컬 브랜치 없음";
 "No remote branches" = "원격 브랜치 없음";
 "Switch Branch" = "브랜치 전환";
+"Changes" = "변경 사항";
+"All Changes" = "모든 변경 사항";
+"Last Turn" = "마지막 턴";
+"Files Touched This Turn" = "이번 턴에서 건드린 파일";
+"No files touched this turn" = "이번 턴에서 건드린 파일이 없습니다";
+"Only files explicitly reported by Claude editing tools are shown." = "Claude 편집 도구가 명시적으로 보고한 파일만 표시됩니다.";
 
 // MARK: - FileInspectorView
 "Preview" = "미리보기";
@@ -156,8 +187,8 @@
 
 // MARK: - ChatToolbarControls
 "Permission Mode" = "권한 모드";
-"Ask" = "권한 요청";
-"Accept Edits" = "편집 수락";
+"Ask" = "수동 확인";
+"Accept Edits" = "편집 허용";
 "Plan" = "계획 모드";
 "Auto" = "자동 모드";
 "Bypass" = "권한 건너뛰기";

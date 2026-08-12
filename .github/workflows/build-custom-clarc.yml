@@ -1,0 +1,66 @@
+name: Build Custom Clarc
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run package tests
+        working-directory: Packages
+        run: swift test
+
+      - name: Run app tests
+        run: |
+          xcodebuild test \
+            -project Clarc.xcodeproj \
+            -scheme Clarc \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/TestDerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Build unsigned release app
+        run: |
+          xcodebuild build \
+            -project Clarc.xcodeproj \
+            -scheme Clarc \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/ReleaseDerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package app
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ReleaseDerivedData/Build/Products/Release/Clarc.app \
+            artifacts/Clarc.app.zip
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clarc-custom-macos
+          path: artifacts/Clarc.app.zip
+          if-no-files-found: error
+          retention-days: 14

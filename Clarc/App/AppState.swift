@@ -1,6 +1,7 @@
 import Foundation
 import ClarcCore
 import SwiftUI
+import AppKit
 import os
 import ClarcChatKit
 
@@ -79,6 +80,8 @@ final class AppState {
     // MARK: - Projects (shared)
 
     var projects: [Project] = []
+    private static let ignoredAutoProjectPathsKey = "ignoredAutoProjectPaths"
+    private var isDiscoveringProjects = false
 
     // MARK: - Per-Session State (shared — managed independently by session ID regardless of window)
 
@@ -150,38 +153,22 @@ final class AppState {
 
     // MARK: - Model
 
-    static let availableModels = ["default", "best", "fable", "opus", "opus[1m]", "opusplan", "sonnet", "sonnet[1m]", "haiku"]
+    var modelOptions: [ClaudeModelOption] = ClaudeModelCatalog.fallback.options
+    var availableModels: [String] { modelOptions.map(\.argument) }
+    private var claudeSettingsModificationDate: Date?
+    private var claudeSettingsRefreshTask: Task<Void, Never>?
 
-    static func modelDisplayName(_ model: String) -> String {
-        switch model {
-        case "default": return "Default"
-        case "best": return "Best"
-        case "fable": return "Fable"
-        case "opus": return "Opus"
-        case "opus[1m]": return "Opus 1M"
-        case "opusplan": return "Opus Plan"
-        case "sonnet": return "Sonnet"
-        case "sonnet[1m]": return "Sonnet 1M"
-        case "haiku": return "Haiku"
-        default: return model.capitalized
-        }
+    private static var claudeSettingsURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude/settings.json")
     }
 
-    static func modelDescription(_ model: String) -> String {
-        let key: String
-        switch model {
-        case "default":   key = "model.desc.default"
-        case "best":      key = "model.desc.best"
-        case "fable":     key = "model.desc.fable"
-        case "opus":      key = "model.desc.opus"
-        case "opus[1m]":  key = "model.desc.opus1m"
-        case "opusplan":  key = "model.desc.opusplan"
-        case "sonnet":    key = "model.desc.sonnet"
-        case "sonnet[1m]": key = "model.desc.sonnet1m"
-        case "haiku":     key = "model.desc.haiku"
-        default: return ""
-        }
-        return NSLocalizedString(key, comment: "")
+    func modelDisplayName(_ model: String) -> String {
+        modelOptions.first(where: { $0.argument == model })?.displayName ?? model
+    }
+
+    func modelDescription(_ model: String) -> String {
+        modelOptions.first(where: { $0.argument == model })?.description ?? ""
     }
     static let availableEfforts = ["low", "medium", "high", "xhigh", "max"]
 
@@ -201,6 +188,17 @@ final class AppState {
         case .bypassPermissions: key = "perm.desc.bypassPermissions"
         }
         return NSLocalizedString(key, comment: "")
+    }
+
+    static func permissionModeDisplayName(_ mode: PermissionMode) -> String {
+        NSLocalizedString(mode.displayName, comment: "Permission mode display name")
+    }
+
+    static func permissionModeTooltip(_ mode: PermissionMode) -> String {
+        String(
+            format: NSLocalizedString("Permission mode: %@", comment: "Permission mode toolbar tooltip"),
+            permissionModeDisplayName(mode)
+        )
     }
 
     static func effortDescription(_ effort: String) -> String {
@@ -253,6 +251,17 @@ final class AppState {
 
     private static let autoPreviewSettingsKey = "attachmentAutoPreviewSettings"
 
+    private static let autoExpandThinkingKey = "autoExpandThinking"
+
+    /// Whether an actively streaming thinking group opens automatically. The
+    /// default is intentionally collapsed so the conversation stays scannable.
+    var autoExpandThinking: Bool =
+        (UserDefaults.standard.object(forKey: AppState.autoExpandThinkingKey) as? Bool) ?? false {
+        didSet {
+            UserDefaults.standard.set(autoExpandThinking, forKey: Self.autoExpandThinkingKey)
+        }
+    }
+
     var autoPreviewSettings: AttachmentAutoPreviewSettings = {
         guard let data = UserDefaults.standard.data(forKey: AppState.autoPreviewSettingsKey),
               let settings = try? JSONDecoder().decode(AttachmentAutoPreviewSettings.self, from: data) else {
@@ -304,7 +313,7 @@ final class AppState {
         }
         if mainWindow.selectedProject?.id == projectId {
             guard mainWindow.currentSessionId != sessionId else { return }
-            mainWindow.currentSessionId = sessionId
+            selectSession(id: sessionId, in: mainWindow)
         } else {
             selectSession(id: sessionId, in: mainWindow)
         }
@@ -338,9 +347,19 @@ final class AppState {
 
     func modelDisplayName(for model: String, in window: WindowState) -> String {
         if let active = activeModelName(in: window) {
-            return active
+            return runtimeModelDisplayName(active)
         }
-        return Self.modelDisplayName(model)
+        return modelDisplayName(model)
+    }
+
+    private func runtimeModelDisplayName(_ raw: String) -> String {
+        if let option = modelOptions.first(where: {
+            $0.actualModelId.caseInsensitiveCompare(raw) == .orderedSame
+                || $0.argument.caseInsensitiveCompare(raw) == .orderedSame
+        }) {
+            return option.displayName
+        }
+        return raw
     }
 
     static func formatModelId(_ raw: String) -> String {
@@ -363,8 +382,17 @@ final class AppState {
 
     // MARK: - Permissions
 
-    var permissionMode: PermissionMode = .default {
-        didSet { UserDefaults.standard.set(permissionMode.rawValue, forKey: "selectedPermissionMode") }
+    private static let selectedPermissionModeKey = "selectedPermissionMode"
+    private static let selectedPermissionModeExplicitKey = "selectedPermissionModeExplicitlySet"
+
+    /// Resolved default for *new* sessions. Existing sessions keep their own
+    /// snapshot in `SessionStreamState.permissionMode`.
+    private(set) var permissionMode: PermissionMode = .auto
+
+    func setDefaultPermissionMode(_ mode: PermissionMode) {
+        permissionMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.selectedPermissionModeKey)
+        UserDefaults.standard.set(true, forKey: Self.selectedPermissionModeExplicitKey)
     }
 
     // MARK: - GitHub
@@ -511,6 +539,10 @@ final class AppState {
         return sessionStates[sessionId]?.isStreaming ?? false
     }
 
+    func isSessionStreaming(_ sessionId: String) -> Bool {
+        sessionStates[sessionId]?.isStreaming ?? false
+    }
+
     /// Returns the set of session IDs currently streaming in the background of this window.
     func backgroundStreamingSessionIds(in window: WindowState) -> Set<String> {
         let currentKey = window.currentSessionId ?? window.newSessionKey
@@ -520,6 +552,100 @@ final class AppState {
     }
 
     // MARK: - Initialization
+
+    private var ignoredAutoProjectPaths: Set<String> {
+        get {
+            Set((UserDefaults.standard.stringArray(forKey: Self.ignoredAutoProjectPathsKey) ?? [])
+                .map { $0.standardizedCwd() })
+        }
+        set {
+            UserDefaults.standard.set(newValue.sorted(), forKey: Self.ignoredAutoProjectPathsKey)
+        }
+    }
+
+    private func refreshModelCatalog(useConfiguredDefault: Bool, force: Bool = false) {
+        let modificationDate = try? Self.claudeSettingsURL
+            .resourceValues(forKeys: [.contentModificationDateKey])
+            .contentModificationDate
+        guard force || modificationDate != claudeSettingsModificationDate else { return }
+        claudeSettingsModificationDate = modificationDate
+
+        let snapshot = ClaudeModelCatalog.load(from: Self.claudeSettingsURL)
+        guard snapshot.options != modelOptions || (useConfiguredDefault && selectedModel != snapshot.defaultArgument) else {
+            return
+        }
+        modelOptions = snapshot.options
+        if useConfiguredDefault || !availableModels.contains(selectedModel) {
+            selectedModel = snapshot.defaultArgument
+        }
+    }
+
+    private func scheduleClaudeSettingsRefresh() {
+        claudeSettingsRefreshTask?.cancel()
+        claudeSettingsRefreshTask = Task { [weak self] in
+            // CCSwitch commonly replaces settings.json atomically. Debouncing
+            // avoids publishing the short-lived "file missing" state.
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled, let self else { return }
+            self.refreshModelCatalog(useConfiguredDefault: true, force: true)
+            self.permissionMode = Self.resolveDefaultPermissionMode()
+        }
+    }
+
+    /// Merge Claude Code workspaces into the persistent project list. Existing
+    /// projects retain their UUID and user-assigned display name.
+    private func syncDiscoveredProjects(forceRefresh: Bool) async {
+        guard !isDiscoveringProjects else { return }
+        isDiscoveringProjects = true
+        defer { isDiscoveringProjects = false }
+
+        let discovered = await cliStore.discoverProjects(forceRefresh: forceRefresh)
+        let ignored = ignoredAutoProjectPaths
+        var knownPaths = Set(projects.map { $0.path.standardizedCwd() })
+        var additions: [Project] = []
+
+        for item in discovered {
+            let path = item.cwd.standardizedCwd()
+            guard !ignored.contains(path), knownPaths.insert(path).inserted else { continue }
+            additions.append(Project(
+                name: URL(fileURLWithPath: path).lastPathComponent.isEmpty
+                    ? path
+                    : URL(fileURLWithPath: path).lastPathComponent,
+                path: path
+            ))
+        }
+
+        guard !additions.isEmpty else { return }
+        projects.append(contentsOf: additions)
+        do {
+            try await persistence.saveProjects(projects)
+        } catch {
+            logger.error("Failed to save discovered projects: \(error.localizedDescription)")
+        }
+
+        for project in additions {
+            watchProjectDirectory(project)
+            await reloadSessionSummaries(for: project)
+        }
+    }
+
+    private func watchDiscoverySources() {
+        Task { [weak self] in
+            guard let self else { return }
+            await self.directoryWatcher.watch(url: CLIProjectsDirectory.url) { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.syncDiscoveredProjects(forceRefresh: true)
+                }
+            }
+
+            let claudeDirectory = Self.claudeSettingsURL.deletingLastPathComponent()
+            await self.directoryWatcher.watch(url: claudeDirectory) { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.scheduleClaudeSettingsRefresh()
+                }
+            }
+        }
+    }
 
     /// Once per app launch — start services and load shared data
     func initialize() async {
@@ -538,13 +664,19 @@ final class AppState {
             }
         }
 
+        refreshModelCatalog(useConfiguredDefault: true, force: true)
+
         projects = await persistence.loadProjects()
         var seenPaths = Set<String>()
-        let deduplicated = projects.filter { seenPaths.insert($0.path).inserted }
+        let deduplicated = projects.filter { project in
+            seenPaths.insert(project.path.standardizedCwd()).inserted
+        }
         if deduplicated.count != projects.count {
             projects = deduplicated
             try? await persistence.saveProjects(projects)
         }
+
+        await syncDiscoveredProjects(forceRefresh: true)
 
         if let cachedUser = await persistence.loadGitHubUser() {
             gitHubUser = cachedUser
@@ -561,13 +693,14 @@ final class AppState {
         for project in projects {
             watchProjectDirectory(project)
         }
+        watchDiscoverySources()
 
         if claudeInstalled && !onboardingCompleted {
             onboardingCompleted = true
             UserDefaults.standard.set(true, forKey: "onboardingCompleted")
         }
 
-        permissionMode = Self.readPermissionModeFromSettings()
+        permissionMode = Self.resolveDefaultPermissionMode()
 
         do {
             try await permission.start()
@@ -689,6 +822,7 @@ final class AppState {
         func observeSettings() {
             withObservationTracking {
                 bridge.autoPreviewSettings = self.autoPreviewSettings
+                bridge.autoExpandThinking = self.autoExpandThinking
             } onChange: {
                 Task { @MainActor in observeSettings() }
             }
@@ -822,7 +956,10 @@ final class AppState {
         case "model":
             if parts.count > 1 {
                 let arg = String(parts[1]).trimmingCharacters(in: .whitespaces).lowercased()
-                let matched = Self.availableModels.first { $0 == arg } ?? Self.availableModels.first { arg.contains($0) } ?? arg
+                let matched = availableModels.first { $0.lowercased() == arg }
+                    ?? modelOptions.first { $0.displayName.lowercased() == arg }?.argument
+                    ?? availableModels.first { arg.contains($0.lowercased()) }
+                    ?? arg
                 setSessionModel(matched, in: window)
             } else {
                 window.showModelPicker = true
@@ -959,13 +1096,18 @@ final class AppState {
         let isPending = window.currentSessionId.map { window.pendingPlaceholderIds.contains($0) } ?? false
         let cliSessionId: String? = (isNewSession || isPending) ? nil : window.currentSessionId
 
+        let currentPermissionMode = window.sessionPermissionMode ?? permissionMode
+
         if isNewSession {
             let tempId = "pending-\(streamId.uuidString)"
             window.currentSessionId = tempId
             window.insertPendingPlaceholder(tempId)
             let snapModel = window.sessionModel
             let snapEffort = window.sessionEffort
-            let snapPermission = window.sessionPermissionMode
+            // Snapshot the resolved default on first send. This makes the
+            // session independent from later global/Claude setting changes.
+            let snapPermission = currentPermissionMode
+            window.sessionPermissionMode = snapPermission
             updateState(tempId) { state in
                 state.model = snapModel
                 state.effort = snapEffort
@@ -974,6 +1116,11 @@ final class AppState {
         }
 
         let sessionKey = window.currentSessionId!
+
+        if sessionStates[sessionKey]?.permissionMode == nil {
+            window.sessionPermissionMode = currentPermissionMode
+            updateState(sessionKey) { $0.permissionMode = currentPermissionMode }
+        }
 
         // Apply initialMessages if provided
         if let initial = initialMessages {
@@ -998,7 +1145,6 @@ final class AppState {
         }
         await permission.refreshRunToken()
 
-        let currentPermissionMode = window.sessionPermissionMode ?? permissionMode
         let currentEffort = window.sessionEffort ?? (selectedEffort == "auto" ? nil : selectedEffort)
         // Always register a hook file — even in bypassPermissions mode, AskUserQuestion
         // needs the hook to deliver the user's answer. The matcher narrows accordingly.
@@ -1872,8 +2018,13 @@ final class AppState {
     // MARK: - Project Management
 
     func addProject(name: String, path: String, gitHubRepo: String?) async {
-        guard !projects.contains(where: { $0.path == path }) else { return }
-        let project = Project(name: name, path: path, gitHubRepo: gitHubRepo)
+        let standardizedPath = path.standardizedCwd()
+        var ignored = ignoredAutoProjectPaths
+        if ignored.remove(standardizedPath) != nil {
+            ignoredAutoProjectPaths = ignored
+        }
+        guard !projects.contains(where: { $0.path.standardizedCwd() == standardizedPath }) else { return }
+        let project = Project(name: name, path: standardizedPath, gitHubRepo: gitHubRepo)
         projects.append(project)
         watchProjectDirectory(project)
         do {
@@ -1954,12 +2105,17 @@ final class AppState {
     }
 
     private func addAndSelectProject(name: String, path: String, gitHubRepo: String? = nil, in window: WindowState) async {
-        if let existing = projects.first(where: { $0.path == path }) {
+        let standardizedPath = path.standardizedCwd()
+        if let existing = projects.first(where: { $0.path.standardizedCwd() == standardizedPath }) {
+            var ignored = ignoredAutoProjectPaths
+            if ignored.remove(standardizedPath) != nil {
+                ignoredAutoProjectPaths = ignored
+            }
             selectProject(existing, in: window)
             return
         }
-        await addProject(name: name, path: path, gitHubRepo: gitHubRepo)
-        if let project = projects.last {
+        await addProject(name: name, path: standardizedPath, gitHubRepo: gitHubRepo)
+        if let project = projects.first(where: { $0.path.standardizedCwd() == standardizedPath }) {
             selectProject(project, in: window)
         }
     }
@@ -2431,7 +2587,43 @@ final class AppState {
         }
     }
 
+    func togglePinProject(_ project: Project) async {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
+        projects[index].isPinned.toggle()
+        do {
+            try await persistence.saveProjects(projects)
+        } catch {
+            projects[index].isPinned.toggle()
+            logger.error("Failed to save project pin state: \(error.localizedDescription)")
+        }
+    }
+
+    func revealProjectInFinder(_ project: Project) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)])
+    }
+
+    func revealSessionInFinder(_ session: ChatSession.Summary) async {
+        let url: URL
+        switch session.origin {
+        case .cliBacked:
+            guard let cwd = projects.first(where: { $0.id == session.projectId })?.path else { return }
+            url = await cliStore.sessionFileURL(sid: session.id, cwd: cwd)
+        case .legacyClarc:
+            url = persistence.legacySessionURL(projectId: session.projectId, sessionId: session.id)
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func removeProject(_ project: Project, in window: WindowState) async {
+        await deleteProject(project, in: window)
+    }
+
     func deleteProject(_ project: Project, in window: WindowState) async {
+        var ignored = ignoredAutoProjectPaths
+        ignored.insert(project.path.standardizedCwd())
+        ignoredAutoProjectPaths = ignored
+
         // Switch away if the deleted project is currently selected
         if window.selectedProject?.id == project.id {
             let next = projects.first(where: { $0.id != project.id })
@@ -2458,18 +2650,18 @@ final class AppState {
     }
 
     func deleteSession(_ session: ChatSession, in window: WindowState) async {
-        if window.currentSessionId == session.id {
-            detachCurrentStream(in: window)
-            startNewChat(in: window)
-        }
         let origin = allSessionSummaries.first(where: { $0.id == session.id })?.origin ?? session.origin
         let cwd = projects.first(where: { $0.id == session.projectId })?.path
         do {
             try await persistence.deleteSession(projectId: session.projectId, sessionId: session.id, origin: origin, cwd: cwd)
         } catch {
             logger.error("Failed to delete session: \(error.localizedDescription)")
+            return
         }
-        allSessionSummaries.removeAll { $0.id == session.id }
+        if window.currentSessionId == session.id {
+            startNewChat(in: window)
+        }
+        allSessionSummaries.removeAll { $0.id == session.id && $0.projectId == session.projectId }
         sessionStates.removeValue(forKey: session.id)
         lastCommittedReloadKey.removeValue(forKey: session.id)
     }
@@ -2481,16 +2673,11 @@ final class AppState {
         } else {
             toDelete = allSessionSummaries
         }
-        let ids = Set(toDelete.map(\.id))
-
-        // Only disrupt the current window's stream if its session is actually
-        // being deleted — otherwise a project-scoped delete would clobber an
-        // unrelated streaming session.
-        if let currentId = window.currentSessionId, ids.contains(currentId) {
-            detachCurrentStream(in: window)
-            startNewChat(in: window)
+        guard !toDelete.contains(where: { isSessionStreaming($0.id) }) else {
+            logger.warning("Refusing to delete chat history while one of the target sessions is running")
+            return
         }
-
+        var deletedIds = Set<String>()
         for summary in toDelete {
             let cwd = projects.first(where: { $0.id == summary.projectId })?.path
             do {
@@ -2500,13 +2687,17 @@ final class AppState {
                     origin: summary.origin,
                     cwd: cwd
                 )
+                deletedIds.insert(summary.id)
             } catch {
                 logger.error("Failed to delete session \(summary.id): \(error.localizedDescription)")
             }
         }
 
-        allSessionSummaries.removeAll { ids.contains($0.id) }
-        for id in ids {
+        allSessionSummaries.removeAll { deletedIds.contains($0.id) }
+        if let currentId = window.currentSessionId, deletedIds.contains(currentId) {
+            startNewChat(in: window)
+        }
+        for id in deletedIds {
             sessionStates.removeValue(forKey: id)
             lastCommittedReloadKey.removeValue(forKey: id)
         }
@@ -2553,9 +2744,16 @@ final class AppState {
     }
 
     func addProject(_ project: Project) {
-        guard !projects.contains(where: { $0.path == project.path }) else { return }
-        projects.append(project)
-        watchProjectDirectory(project)
+        let standardizedPath = project.path.standardizedCwd()
+        var ignored = ignoredAutoProjectPaths
+        if ignored.remove(standardizedPath) != nil {
+            ignoredAutoProjectPaths = ignored
+        }
+        guard !projects.contains(where: { $0.path.standardizedCwd() == standardizedPath }) else { return }
+        var normalizedProject = project
+        normalizedProject.path = standardizedPath
+        projects.append(normalizedProject)
+        watchProjectDirectory(normalizedProject)
         Task {
             do { try await persistence.saveProjects(projects) }
             catch { logger.error("Failed to save projects: \(error.localizedDescription)") }
@@ -2869,21 +3067,34 @@ final class AppState {
 
     // MARK: - Claude Settings Reader
 
-    private nonisolated static func readPermissionModeFromSettings() -> PermissionMode {
-        let url = FileManager.default.homeDirectoryForCurrentUser
+    nonisolated static func resolveDefaultPermissionMode(
+        defaults: UserDefaults = .standard,
+        claudeSettingsURL: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/settings.json")
-        if let data = try? Data(contentsOf: url),
+    ) -> PermissionMode {
+        // New builds mark explicit choices separately. For a one-time legacy
+        // migration, a valid old selectedPermissionMode is conservatively
+        // treated as an intentional preference because its origin cannot be
+        // reconstructed reliably.
+        let hasExplicitMarker = defaults.bool(forKey: selectedPermissionModeExplicitKey)
+        let legacyValue = defaults.string(forKey: selectedPermissionModeKey)
+        if (hasExplicitMarker || legacyValue != nil),
+           let saved = legacyValue,
+           let parsed = PermissionMode(rawValue: saved) {
+            if !hasExplicitMarker {
+                defaults.set(true, forKey: selectedPermissionModeExplicitKey)
+            }
+            return parsed
+        }
+
+        if let data = try? Data(contentsOf: claudeSettingsURL),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let permissions = json["permissions"] as? [String: Any],
            let mode = permissions["defaultMode"] as? String,
            let parsed = PermissionMode(rawValue: mode) {
             return parsed
         }
-        if let saved = UserDefaults.standard.string(forKey: "selectedPermissionMode"),
-           let parsed = PermissionMode(rawValue: saved) {
-            return parsed
-        }
-        return .default
+        return .auto
     }
 }
 

@@ -30,5 +30,13 @@ let package = Package(
             dependencies: ["ClarcCore"],
             path: "Tests/ClarcCoreTests"
         ),
+        .testTarget(
+            name: "ClarcChatKitTests",
+            dependencies: ["ClarcChatKit", "ClarcCore"],
+            path: "Tests/ClarcChatKitTests",
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
     ]
 )

@@ -23,6 +23,9 @@
 "Used for new sessions. You can override the model per session from the toolbar." = "Se usa en las sesiones nuevas. Puedes cambiar el modelo por sesión desde la barra de herramientas.";
 "Default Permission Mode" = "Modo de permisos predeterminado";
 "Used for new sessions. You can override the permission mode per session from the toolbar." = "Se usa en las sesiones nuevas. Puedes cambiar el modo de permisos por sesión desde la barra de herramientas.";
+"Thinking Display" = "Visualización del razonamiento";
+"thinking.auto.expand.desc" = "Controla si el razonamiento se abre automáticamente durante la transmisión. La selección manual de expandir o contraer siempre tiene prioridad.";
+"Auto-expand thinking while Claude is working" = "Expandir el razonamiento mientras Claude trabaja";
 "Default Effort Level" = "Nivel de esfuerzo predeterminado";
 "Used for new sessions. You can override the effort level per session from the toolbar." = "Se usa en las sesiones nuevas. Puedes cambiar el nivel de esfuerzo por sesión desde la barra de herramientas.";
 "Font Size" = "Tamaño de fuente";
@@ -59,6 +62,14 @@
 "Select Model" = "Seleccionar modelo";
 "Select Effort Level" = "Seleccionar nivel de esfuerzo";
 "↑↓ Select  ↵ Confirm  esc Cancel" = "↑↓ Seleccionar  ↵ Confirmar  esc Cancelar";
+"Quick Switcher" = "Selector rápido";
+"Open Quick Switcher" = "Abrir selector rápido";
+"Search projects and chats..." = "Buscar proyectos y chats...";
+"No matching projects or chats" = "No hay proyectos ni chats coincidentes";
+"Project" = "Proyecto";
+"Chat" = "Chat";
+"Pinned" = "Fijado";
+"Running" = "En ejecución";
 
 // MARK: - SkillMarketView
 "Refresh" = "Actualizar";
@@ -109,6 +120,17 @@
 "Delete Project" = "Eliminar proyecto";
 "This will remove the project from Clarc. The files on disk will not be deleted." = "Esto eliminará el proyecto de Clarc. Los archivos del disco no se eliminarán.";
 "Project name" = "Nombre del proyecto";
+"Pin Project" = "Fijar proyecto";
+"Unpin Project" = "Desfijar proyecto";
+"Remove Project" = "Quitar proyecto";
+"Remove \"%@\" from Clarc?" = "¿Quitar «%@» de Clarc?";
+"Pin Chat" = "Fijar chat";
+"Unpin Chat" = "Desfijar chat";
+"Rename Chat" = "Renombrar chat";
+"Chat name" = "Nombre del chat";
+"Delete Chat?" = "¿Eliminar chat?";
+"Delete Chat" = "Eliminar chat";
+"This will delete the corresponding Claude Code chat history. It cannot be recovered through Clarc." = "Esto eliminará el historial de chat correspondiente de Claude Code. No se podrá recuperar mediante Clarc.";
 
 // MARK: - HistoryListView
 "Show current project only" = "Mostrar solo el proyecto actual";
@@ -130,6 +152,9 @@
 "Unpin" = "Desfijar";
 "Pin" = "Fijar";
 "No chat history" = "Sin sesiones";
+"No Projects" = "Sin proyectos";
+"Show More" = "Mostrar más";
+"Show Less" = "Mostrar menos";
 
 // MARK: - GitStatusView
 "Checking..." = "Comprobando...";
@@ -142,6 +167,12 @@
 "No local branches" = "Sin ramas locales";
 "No remote branches" = "Sin ramas remotas";
 "Switch Branch" = "Cambiar de rama";
+"Changes" = "Cambios";
+"All Changes" = "Todos los cambios";
+"Last Turn" = "Último turno";
+"Files Touched This Turn" = "Archivos tocados en este turno";
+"No files touched this turn" = "No se tocaron archivos en este turno";
+"Only files explicitly reported by Claude editing tools are shown." = "Solo se muestran los archivos que las herramientas de edición de Claude indicaron explícitamente.";
 
 // MARK: - FileInspectorView
 "Preview" = "Vista previa";
@@ -156,8 +187,8 @@
 
 // MARK: - ChatToolbarControls
 "Permission Mode" = "Modo de permisos";
-"Ask" = "Preguntar";
-"Accept Edits" = "Aceptar ediciones";
+"Ask" = "Confirmación manual";
+"Accept Edits" = "Permitir ediciones";
 "Plan" = "Modo plan";
 "Auto" = "Modo automático";
 "Bypass" = "Omitir permisos";

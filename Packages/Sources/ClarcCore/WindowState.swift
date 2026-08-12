@@ -100,6 +100,7 @@ public final class WindowState {
     public var showMarketplace = false
     public var showModelPicker = false
     public var showEffortPicker = false
+    public var showQuickSwitcher = false
     /// Per-session model override. When set, this model is used instead of the global default.
     /// Cleared when a new chat is started or a different session is selected.
     public var sessionModel: String?
