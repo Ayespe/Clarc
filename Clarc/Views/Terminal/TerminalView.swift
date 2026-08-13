@@ -119,7 +119,7 @@ struct EmbeddedTerminalView: NSViewRepresentable {
         terminalView.needsDisplay = true
     }
 
-    private func resolvedColor(_ color: Color, fallback: NSColor) -> NSColor {
+    private func resolvedColor(_ color: SwiftUI.Color, fallback: NSColor) -> NSColor {
         let appearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
         guard let appearance = NSAppearance(named: appearanceName) else { return fallback }
         var resolved = fallback
