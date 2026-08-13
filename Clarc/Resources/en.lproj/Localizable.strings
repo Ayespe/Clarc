@@ -547,3 +547,14 @@
 "Bottom" = "Bottom";
 "Show memo and terminal together" = "Show memo and terminal together";
 "Splits the panel in two. On the right they stack (memo on top); at the bottom they sit side by side (memo on the left)." = "Splits the panel in two. On the right they stack (memo on top); at the bottom they sit side by side (memo on the left).";
+
+/* Notification preferences */
+"Turn completion notifications" = "Turn completion notifications";
+"Choose when Clarc alerts you after a response finishes." = "Choose when Clarc alerts you after a response finishes.";
+"Always" = "Always";
+"When Clarc is inactive" = "When Clarc is inactive";
+"Never" = "Never";
+"Enable question notifications" = "Enable question notifications";
+"Show an alert when input is required to continue." = "Show an alert when input is required to continue.";
+"The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "The Dock icon bounces once when an enabled alert arrives while Clarc is inactive.";
+"Input required to continue" = "Input required to continue";

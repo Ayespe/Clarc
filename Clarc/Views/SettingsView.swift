@@ -66,7 +66,7 @@ struct GeneralSettingsTab: View {
                 Divider()
                 fontSizeSection
                 Divider()
-                notificationsSection(appState: $appState.notificationsEnabled)
+                notificationsSection
                 Divider()
                 inspectorLayoutSection
                 Divider()
@@ -174,13 +174,53 @@ struct GeneralSettingsTab: View {
 
     // MARK: - Notifications Section
 
-    private func notificationsSection(appState: Binding<Bool>) -> some View {
-        toggleSection(
-            title: "Notifications",
-            label: "Notify when response completes",
-            detail: "Sends a system notification while Clarc is in the background.",
-            isOn: appState
-        )
+    private var notificationsSection: some View {
+        @Bindable var appState = appState
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("Notifications")
+                .font(.system(size: ClaudeTheme.size(13), weight: .semibold))
+
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Turn completion notifications")
+                        .font(.system(size: ClaudeTheme.size(13)))
+                    Text("Choose when Clarc alerts you after a response finishes.")
+                        .font(.system(size: ClaudeTheme.size(11)))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Picker("", selection: $appState.turnCompletionNotificationMode) {
+                    Text("Always").tag(TurnCompletionNotificationMode.always)
+                    Text("When Clarc is inactive").tag(TurnCompletionNotificationMode.whenInactive)
+                    Text("Never").tag(TurnCompletionNotificationMode.never)
+                }
+                .labelsHidden()
+                .frame(width: 180)
+                .onChange(of: appState.turnCompletionNotificationMode) { _, mode in
+                    guard mode != .never else { return }
+                    Task { await NotificationService.shared.requestAuthorizationIfNeeded() }
+                }
+            }
+
+            Toggle(isOn: $appState.questionNotificationsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Enable question notifications")
+                        .font(.system(size: ClaudeTheme.size(13)))
+                    Text("Show an alert when input is required to continue.")
+                        .font(.system(size: ClaudeTheme.size(11)))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .onChange(of: appState.questionNotificationsEnabled) { _, enabled in
+                guard enabled else { return }
+                Task { await NotificationService.shared.requestAuthorizationIfNeeded() }
+            }
+
+            Text("The Dock icon bounces once when an enabled alert arrives while Clarc is inactive.")
+                .font(.system(size: ClaudeTheme.size(11)))
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Inspector Layout Section

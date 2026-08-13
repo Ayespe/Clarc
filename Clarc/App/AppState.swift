@@ -5,6 +5,14 @@ import AppKit
 import os
 import ClarcChatKit
 
+enum TurnCompletionNotificationMode: String, CaseIterable, Identifiable, Sendable {
+    case always
+    case whenInactive
+    case never
+
+    var id: String { rawValue }
+}
+
 // MARK: - Per-Session Stream State
 
 /// Cache key for reloadCommittedFromDisk: both size and mtime must match to skip a parse.
@@ -225,8 +233,40 @@ final class AppState {
 
     // MARK: - Notifications
 
-    var notificationsEnabled: Bool = (UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool) ?? true {
-        didSet { UserDefaults.standard.set(notificationsEnabled, forKey: "notificationsEnabled") }
+    var turnCompletionNotificationMode: TurnCompletionNotificationMode = AppState.resolveTurnCompletionNotificationMode(
+        defaults: .standard
+    ) {
+        didSet {
+            UserDefaults.standard.set(
+                turnCompletionNotificationMode.rawValue,
+                forKey: "turnCompletionNotificationMode"
+            )
+        }
+    }
+
+    nonisolated static func resolveTurnCompletionNotificationMode(
+        defaults: UserDefaults
+    ) -> TurnCompletionNotificationMode {
+        if let raw = defaults.string(forKey: "turnCompletionNotificationMode"),
+           let mode = TurnCompletionNotificationMode(rawValue: raw) {
+            return mode
+        }
+        // Preserve the old single-toggle preference on first launch after upgrade.
+        if let enabled = defaults.object(forKey: "notificationsEnabled") as? Bool {
+            return enabled ? .whenInactive : .never
+        }
+        return .whenInactive
+    }
+
+    var questionNotificationsEnabled: Bool = (UserDefaults.standard.object(
+        forKey: "questionNotificationsEnabled"
+    ) as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(
+                questionNotificationsEnabled,
+                forKey: "questionNotificationsEnabled"
+            )
+        }
     }
 
     // MARK: - Focus Mode
@@ -1527,7 +1567,12 @@ final class AppState {
                             }
                         }
 
-                        if notificationsEnabled && !NSApp.isActive {
+                        let shouldNotifyCompletion = switch turnCompletionNotificationMode {
+                        case .always: true
+                        case .whenInactive: !NSApp.isActive
+                        case .never: false
+                        }
+                        if shouldNotifyCompletion {
                             let title = allSessionSummaries.first(where: { $0.id == resultEvent.sessionId })?.title ?? "New Session"
                             let firstSentence = stateForSession(sessionKey).allMessages
                                 .last(where: { $0.role == .assistant && !$0.isError })
@@ -1562,7 +1607,12 @@ final class AppState {
                     if eventCount <= 5 || eventCount % 100 == 0 {
                         logger.debug("[Stream:UI] event #\(eventCount) .unknown (gap=\(String(format: "%.1f", gap))s, len=\(raw.count))")
                     }
-                    handlePartialEvent(raw, for: sessionKey)
+                    handlePartialEvent(
+                        raw,
+                        for: sessionKey,
+                        projectId: projectId,
+                        window: window
+                    )
                 }
             }
 
@@ -1721,7 +1771,12 @@ final class AppState {
 
     // MARK: - Stream Event Handler
 
-    private func handlePartialEvent(_ raw: String, for sessionKey: String) {
+    private func handlePartialEvent(
+        _ raw: String,
+        for sessionKey: String,
+        projectId: UUID,
+        window: WindowState
+    ) {
         guard let data = raw.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
 
@@ -1744,6 +1799,20 @@ final class AppState {
                 guard let id = contentBlock["id"] as? String,
                       let name = contentBlock["name"] as? String else { return }
                 let toolCall = ToolCall(id: id, name: name, input: [:])
+                if name.caseInsensitiveCompare("AskUserQuestion") == .orderedSame,
+                   questionNotificationsEnabled,
+                   (!NSApp.isActive || !isForegroundStream(sessionKey, in: window)) {
+                    let title = allSessionSummaries.first(where: { $0.id == sessionKey })?.title
+                        ?? projects.first(where: { $0.id == projectId })?.name
+                        ?? "Clarc"
+                    Task { @MainActor in
+                        await NotificationService.shared.postInputRequired(
+                            title: title,
+                            projectId: projectId,
+                            sessionId: sessionKey
+                        )
+                    }
+                }
                 // Flush the text buffer first so text blocks are committed before tools
                 flushPendingUpdates(for: sessionKey)
                 updateState(sessionKey) { state in

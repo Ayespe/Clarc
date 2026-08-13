@@ -92,7 +92,10 @@ struct MainWindowRoot: View {
                 await appState.initialize()
                 appState.setupChatBridge(chatBridge, for: windowState)
                 await appState.initializeWindow(windowState)
-                await NotificationService.shared.requestAuthorizationIfNeeded()
+                if appState.turnCompletionNotificationMode != .never
+                    || appState.questionNotificationsEnabled {
+                    await NotificationService.shared.requestAuthorizationIfNeeded()
+                }
                 NotificationService.shared.onNotificationTapped = { projectId, sessionId in
                     appState.handleNotificationTap(projectId: projectId, sessionId: sessionId, mainWindow: windowState)
                 }

@@ -140,6 +140,10 @@ struct MessageBubble: View {
                     }
                 }
             }
+            .frame(
+                maxWidth: message.role == .assistant ? 980 : .infinity,
+                alignment: message.role == .user ? .trailing : .leading
+            )
 
             if message.role == .assistant {
                 Spacer(minLength: 40)

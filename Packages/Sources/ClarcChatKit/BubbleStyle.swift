@@ -22,11 +22,21 @@ struct BubbleStyle: ViewModifier {
     static let toolPadding = EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
     static let borderWidth: CGFloat = 0.5
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background(background, in: shape)
-            .overlay(border)
+        switch variant {
+        case .assistant:
+            // Codex-style assistant prose is part of the reading canvas, not a
+            // card. Semantic children such as code, tables and tools keep their
+            // own containers where a boundary actually carries meaning.
+            content
+                .padding(.vertical, 2)
+        default:
+            content
+                .padding(padding)
+                .background(background, in: shape)
+                .overlay(border)
+        }
     }
 
     // MARK: - Variant Properties
@@ -43,7 +53,7 @@ struct BubbleStyle: ViewModifier {
     private var background: some ShapeStyle {
         switch variant {
         case .user:       AnyShapeStyle(ClaudeTheme.userBubble)
-        case .assistant:  AnyShapeStyle(ClaudeTheme.assistantBubble)
+        case .assistant:  AnyShapeStyle(Color.clear)
         case .error:      AnyShapeStyle(ClaudeTheme.statusError.opacity(0.08))
         case .tool:       AnyShapeStyle(ClaudeTheme.surfacePrimary)
         case .toolError:  AnyShapeStyle(ClaudeTheme.statusError.opacity(0.06))
@@ -59,6 +69,8 @@ struct BubbleStyle: ViewModifier {
             shape.strokeBorder(ClaudeTheme.statusError.opacity(0.3), lineWidth: Self.borderWidth)
         case .toolError:
             shape.strokeBorder(ClaudeTheme.statusError.opacity(0.3), lineWidth: Self.borderWidth)
+        case .assistant:
+            EmptyView()
         default:
             shape.strokeBorder(ClaudeTheme.border, lineWidth: Self.borderWidth)
         }

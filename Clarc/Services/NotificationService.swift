@@ -2,7 +2,7 @@ import AppKit
 import UserNotifications
 import os.log
 
-/// Thin wrapper around UNUserNotificationCenter for "response complete" banners.
+/// Thin wrapper around UNUserNotificationCenter for turn and input banners.
 /// Notifications carry the project ID in userInfo so taps can route back to the
 /// correct project window.
 @MainActor
@@ -35,6 +35,33 @@ final class NotificationService: NSObject {
 
     /// Post a "response complete" notification. Silently no-ops if unauthorized.
     func postResponseComplete(title: String, body: String, projectId: UUID, sessionId: String) async {
+        await post(
+            title: title,
+            body: body.isEmpty
+                ? NSLocalizedString("Response complete", comment: "Notification body when Claude finishes a response")
+                : body,
+            projectId: projectId,
+            sessionId: sessionId
+        )
+    }
+
+    func postInputRequired(title: String, projectId: UUID, sessionId: String) async {
+        await post(
+            title: title,
+            body: NSLocalizedString(
+                "Input required to continue",
+                comment: "Notification body when Claude asks the user a question"
+            ),
+            projectId: projectId,
+            sessionId: sessionId
+        )
+    }
+
+    private func post(title: String, body: String, projectId: UUID, sessionId: String) async {
+        if !NSApp.isActive {
+            NSApp.requestUserAttention(.informationalRequest)
+        }
+
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional:
@@ -45,9 +72,7 @@ final class NotificationService: NSObject {
 
         let content = UNMutableNotificationContent()
         content.title = title
-        content.body = body.isEmpty
-            ? NSLocalizedString("Response complete", comment: "Notification body when Claude finishes a response")
-            : body
+        content.body = body
         content.sound = .default
         content.userInfo = ["projectId": projectId.uuidString, "sessionId": sessionId]
 

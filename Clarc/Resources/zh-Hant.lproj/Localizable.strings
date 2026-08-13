@@ -567,3 +567,14 @@
 "Bottom" = "底部";
 "Show memo and terminal together" = "同時顯示備忘和終端機";
 "Splits the panel in two. On the right they stack (memo on top); at the bottom they sit side by side (memo on the left)." = "將面板一分為二。停靠右側時上下排列（備忘在上）；停靠底部時左右排列（備忘在左）。";
+
+/* 通知偏好 */
+"Turn completion notifications" = "輪次完成通知";
+"Choose when Clarc alerts you after a response finishes." = "設定 Clarc 完成回覆後何時提醒你。";
+"Always" = "始終";
+"When Clarc is inactive" = "Clarc 非使用中時";
+"Never" = "永不";
+"Enable question notifications" = "啟用問題通知";
+"Show an alert when input is required to continue." = "需要輸入才能繼續時顯示提醒。";
+"The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "Clarc 非使用中時收到已啟用的提醒，Dock 圖示會跳動一次。";
+"Input required to continue" = "需要輸入才能繼續";

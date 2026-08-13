@@ -567,3 +567,14 @@
 "Bottom" = "Abajo";
 "Show memo and terminal together" = "Mostrar nota y terminal juntos";
 "Splits the panel in two. On the right they stack (memo on top); at the bottom they sit side by side (memo on the left)." = "Divide el panel en dos. A la derecha se apilan (nota arriba); abajo se colocan lado a lado (nota a la izquierda).";
+
+/* Preferencias de notificaciones */
+"Turn completion notifications" = "Notificaciones al completar un turno";
+"Choose when Clarc alerts you after a response finishes." = "Elige cuándo te avisa Clarc al terminar una respuesta.";
+"Always" = "Siempre";
+"When Clarc is inactive" = "Cuando Clarc esté inactivo";
+"Never" = "Nunca";
+"Enable question notifications" = "Activar notificaciones de preguntas";
+"Show an alert when input is required to continue." = "Muestra un aviso cuando se necesite información para continuar.";
+"The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "El icono del Dock rebota una vez al llegar un aviso habilitado mientras Clarc está inactivo.";
+"Input required to continue" = "Se necesita información para continuar";

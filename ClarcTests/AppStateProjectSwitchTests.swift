@@ -196,6 +196,38 @@ final class AppStateProjectSwitchTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: "selectedPermissionModeExplicitlySet"))
     }
 
+    // MARK: - Notification preference migration
+
+    func testTurnCompletionNotificationResolver_prefersNewSetting() {
+        let defaults = makeIsolatedDefaults()
+        defaults.set(false, forKey: "notificationsEnabled")
+        defaults.set(
+            TurnCompletionNotificationMode.always.rawValue,
+            forKey: "turnCompletionNotificationMode"
+        )
+
+        XCTAssertEqual(
+            AppState.resolveTurnCompletionNotificationMode(defaults: defaults),
+            .always
+        )
+    }
+
+    func testTurnCompletionNotificationResolver_migratesLegacyToggle() {
+        let enabled = makeIsolatedDefaults()
+        enabled.set(true, forKey: "notificationsEnabled")
+        XCTAssertEqual(
+            AppState.resolveTurnCompletionNotificationMode(defaults: enabled),
+            .whenInactive
+        )
+
+        let disabled = makeIsolatedDefaults()
+        disabled.set(false, forKey: "notificationsEnabled")
+        XCTAssertEqual(
+            AppState.resolveTurnCompletionNotificationMode(defaults: disabled),
+            .never
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeProject(_ name: String) -> Project {

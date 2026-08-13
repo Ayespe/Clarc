@@ -13,12 +13,8 @@ struct HistoryListView: View {
     /// Anchor row for shift-click range selection.
     @State private var selectionAnchor: String?
     @AppStorage("historyShowAllProjects") private var showAllProjects = true
-    @AppStorage("historyHideCompleted") private var hideCompleted = false
     @State private var showDeleteAllAlert = false
     @State private var sessionIdsPendingDeletion = Set<String>()
-    /// Sessions just marked complete while completed items are hidden — kept
-    /// visible briefly so the checkmark animation plays before they slide out.
-    @State private var pendingHideIds: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -94,16 +90,6 @@ struct HistoryListView: View {
                 .textCase(.uppercase)
 
             Spacer()
-
-            Button {
-                hideCompleted.toggle()
-            } label: {
-                Image(systemName: hideCompleted ? "checkmark.circle" : "checkmark.circle.fill")
-                    .font(.system(size: ClaudeTheme.size(12)))
-                    .foregroundStyle(hideCompleted ? ClaudeTheme.textTertiary : ClaudeTheme.accent)
-            }
-            .buttonStyle(.borderless)
-            .help(hideCompleted ? "Show completed sessions" : "Hide completed sessions")
 
             // No need to toggle all/current in the project window
             if !windowState.isProjectWindow {
@@ -202,22 +188,10 @@ struct HistoryListView: View {
 
     private func sessionRow(_ session: DisplaySession) -> some View {
         HStack(spacing: 6) {
-            Button {
-                completeTapped(session)
-            } label: {
-                Image(systemName: session.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: ClaudeTheme.size(14)))
-                    .foregroundStyle(session.isCompleted ? ClaudeTheme.accent : ClaudeTheme.textTertiary)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.borderless)
-            .help(session.isCompleted ? "Mark as Incomplete" : "Mark as Complete")
-
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.title)
                     .font(.system(size: ClaudeTheme.size(13)))
-                    .foregroundStyle(ClaudeTheme.textPrimary.opacity(session.isCompleted ? 0.45 : 0.9))
-                    .strikethrough(session.isCompleted, color: ClaudeTheme.textTertiary)
+                    .foregroundStyle(ClaudeTheme.textPrimary.opacity(0.9))
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
@@ -256,7 +230,7 @@ struct HistoryListView: View {
     /// Context menu for the right-clicked selection. `ids` is the effective
     /// target set macOS hands us: the full selection when right-clicking a
     /// selected row, or just the clicked row otherwise. Rename is hidden for
-    /// multi-selections; pin/complete/delete apply to every targeted session.
+    /// multi-selections; pin/delete apply to every targeted session.
     @ViewBuilder
     private func sessionContextMenu(for ids: Set<String>) -> some View {
         let targets = sessions.filter { ids.contains($0.id) }
@@ -290,18 +264,6 @@ struct HistoryListView: View {
 
             Divider()
 
-            let allCompleted = targets.allSatisfy { $0.isCompleted }
-            Button {
-                Task { await applyComplete(to: targets, complete: !allCompleted) }
-            } label: {
-                Label(
-                    allCompleted ? "Mark as Incomplete" : "Mark as Complete",
-                    systemImage: allCompleted ? "circle" : "checkmark.circle"
-                )
-            }
-
-            Divider()
-
             Button(role: .destructive) {
                 sessionIdsPendingDeletion = Set(targets.map(\.id))
             } label: {
@@ -327,12 +289,6 @@ struct HistoryListView: View {
             if let session = chatSession(for: target.id) {
                 await appState.togglePinSession(session)
             }
-        }
-    }
-
-    private func applyComplete(to targets: [DisplaySession], complete: Bool) async {
-        for target in targets where target.isCompleted != complete {
-            await appState.toggleCompleteSession(id: target.id)
         }
     }
 
@@ -369,16 +325,13 @@ struct HistoryListView: View {
         let title: String
         let updatedAt: Date
         let isPinned: Bool
-        let isCompleted: Bool
         let projectName: String?
     }
 
     private var sessions: [DisplaySession] {
-        let base = (windowState.isProjectWindow || !showAllProjects)
+        (windowState.isProjectWindow || !showAllProjects)
             ? currentProjectSessions
             : allProjectSessions
-        guard hideCompleted else { return base }
-        return base.filter { !$0.isCompleted || pendingHideIds.contains($0.id) }
     }
 
     private var deleteAllTargets: [ChatSession.Summary] {
@@ -387,22 +340,6 @@ struct HistoryListView: View {
             return appState.allSessionSummaries.filter { $0.projectId == projectId }
         }
         return appState.allSessionSummaries
-    }
-
-    /// Toggle completion. When hiding completed sessions, the just-completed row
-    /// lingers briefly (showing its checkmark) before animating out of the list.
-    private func completeTapped(_ session: DisplaySession) {
-        let willComplete = !session.isCompleted
-        guard hideCompleted && willComplete else {
-            Task { await appState.toggleCompleteSession(id: session.id) }
-            return
-        }
-        pendingHideIds.insert(session.id)
-        Task {
-            await appState.toggleCompleteSession(id: session.id)
-            try? await Task.sleep(for: .seconds(0.6))
-            pendingHideIds.remove(session.id)
-        }
     }
 
     private static func sessionOrder(
@@ -424,7 +361,6 @@ struct HistoryListView: View {
                     title: summary.title,
                     updatedAt: summary.updatedAt,
                     isPinned: summary.isPinned,
-                    isCompleted: summary.isCompleted,
                     projectName: nil
                 )
             }
@@ -445,7 +381,6 @@ struct HistoryListView: View {
                     title: summary.title,
                     updatedAt: summary.updatedAt,
                     isPinned: summary.isPinned,
-                    isCompleted: summary.isCompleted,
                     projectName: projectNames[summary.projectId]
                 )
             }

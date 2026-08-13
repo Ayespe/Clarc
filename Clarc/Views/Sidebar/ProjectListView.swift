@@ -159,9 +159,7 @@ struct ProjectListView: View {
 
     private func projectHeader(_ project: Project) -> some View {
         Button {
-            let wasSelected = windowState.selectedProject?.id == project.id
-            if !wasSelected { appState.selectProject(project, in: windowState) }
-            setExpanded(wasSelected ? !expandedProjectIds.contains(project.id) : true, projectId: project.id)
+            setExpanded(!expandedProjectIds.contains(project.id), projectId: project.id)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")
@@ -224,15 +222,10 @@ struct ProjectListView: View {
             appState.selectSession(id: session.id, in: windowState)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: session.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: ClaudeTheme.size(11)))
-                    .foregroundStyle(session.isCompleted ? ClaudeTheme.accent : ClaudeTheme.textTertiary)
-
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.title)
                         .font(.system(size: ClaudeTheme.size(12)))
-                        .foregroundStyle(ClaudeTheme.textPrimary.opacity(session.isCompleted ? 0.5 : 0.9))
-                        .strikethrough(session.isCompleted, color: ClaudeTheme.textTertiary)
+                        .foregroundStyle(ClaudeTheme.textPrimary.opacity(0.9))
                         .lineLimit(1)
                     Text(Self.relativeDateFormatter.localizedString(for: session.updatedAt, relativeTo: Date()))
                         .font(.system(size: ClaudeTheme.size(10)))
@@ -273,13 +266,6 @@ struct ProjectListView: View {
                 Task { await appState.revealSessionInFinder(session) }
             } label: {
                 Label("Show in Finder", systemImage: "folder")
-            }
-            Divider()
-            Button {
-                Task { await appState.toggleCompleteSession(id: session.id) }
-            } label: {
-                Label(session.isCompleted ? "Mark as Incomplete" : "Mark as Complete",
-                      systemImage: session.isCompleted ? "circle" : "checkmark.circle")
             }
             Divider()
             Button(role: .destructive) {

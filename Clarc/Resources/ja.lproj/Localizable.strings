@@ -567,3 +567,14 @@
 "Bottom" = "下";
 "Show memo and terminal together" = "メモとターミナルを一緒に表示";
 "Splits the panel in two. On the right they stack (memo on top); at the bottom they sit side by side (memo on the left)." = "パネルを2つに分割します。右配置では上下（上がメモ）、下配置では左右（左がメモ）に分かれます。";
+
+/* 通知設定 */
+"Turn completion notifications" = "ターン完了通知";
+"Choose when Clarc alerts you after a response finishes." = "Clarc が応答を完了したときの通知タイミングを選択します。";
+"Always" = "常に";
+"When Clarc is inactive" = "Clarc が非アクティブのとき";
+"Never" = "通知しない";
+"Enable question notifications" = "質問通知を有効にする";
+"Show an alert when input is required to continue." = "続行に入力が必要なときに通知します。";
+"The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "Clarc が非アクティブのとき、有効な通知で Dock アイコンが一度バウンドします。";
+"Input required to continue" = "続行するには入力が必要です";

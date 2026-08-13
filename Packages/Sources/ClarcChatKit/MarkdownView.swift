@@ -48,28 +48,29 @@ enum MarkdownRenderBlock: Equatable {
 
 enum MarkdownTypography {
     static var bodyFontSize: CGFloat { ClaudeTheme.messageSize(14) }
-    static let bodyLineSpacing: CGFloat = 2
-    static let paragraphSpacing: CGFloat = 8
-    static let listItemSpacing: CGFloat = 3
-    static let listSpacing: CGFloat = 6
-    static let blockquoteSpacing: CGFloat = 8
-    static let headingAfterSpacing: CGFloat = 4
-    static let codeSpacing: CGFloat = 8
+    static let bodyLineSpacing: CGFloat = 3
+    static let paragraphSpacing: CGFloat = 11
+    static let listItemSpacing: CGFloat = 5
+    static let listSpacing: CGFloat = 9
+    static let blockquoteSpacing: CGFloat = 11
+    static let headingAfterSpacing: CGFloat = 6
+    static let codeSpacing: CGFloat = 11
 
     static func headingBeforeSpacing(level: Int) -> CGFloat {
         switch level {
-        case 1, 2: 12
-        case 3, 4: 10
-        default: 8
+        case 1: 18
+        case 2: 16
+        case 3, 4: 13
+        default: 10
         }
     }
 
     static func headingFontSize(level: Int) -> CGFloat {
         let base: CGFloat
         switch level {
-        case 1: base = 18
-        case 2: base = 16
-        case 3: base = 15
+        case 1: base = 19
+        case 2: base = 17
+        case 3: base = 15.5
         default: base = 14
         }
         return ClaudeTheme.messageSize(base)
@@ -77,8 +78,7 @@ enum MarkdownTypography {
 
     static func headingWeight(level: Int) -> Font.Weight {
         switch level {
-        case 1, 2: .bold
-        case 3, 4: .semibold
+        case 1, 2, 3, 4: .semibold
         default: .medium
         }
     }
@@ -380,7 +380,8 @@ struct MarkdownContentView: View {
                 fontSize: MarkdownTypography.headingFontSize(level: level),
                 baseWeight: MarkdownTypography.headingWeight(level: level)
             ))
-            .lineSpacing(2)
+            .lineSpacing(MarkdownTypography.bodyLineSpacing)
+            .foregroundStyle(ClaudeTheme.textPrimary)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -423,11 +424,11 @@ private struct MarkdownUnorderedListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MarkdownTypography.listItemSpacing) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Text("•")
                         .font(.system(size: MarkdownTypography.bodyFontSize, weight: .medium))
-                        .foregroundStyle(ClaudeTheme.accent)
-                        .frame(width: 12, alignment: .trailing)
+                        .foregroundStyle(ClaudeTheme.textTertiary)
+                        .frame(width: 10, alignment: .trailing)
                     MarkdownTextView(content: item)
                 }
             }
@@ -441,14 +442,14 @@ private struct MarkdownOrderedListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MarkdownTypography.listItemSpacing) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Text("\(item.number).")
                         .font(.system(
                             size: MarkdownTypography.bodyFontSize,
                             weight: .medium,
                             design: .monospaced
                         ))
-                        .foregroundStyle(ClaudeTheme.accent)
+                        .foregroundStyle(ClaudeTheme.textTertiary)
                         .frame(minWidth: 20, alignment: .trailing)
                     MarkdownTextView(content: item.content)
                 }
@@ -470,12 +471,12 @@ private struct BlockquoteView: View {
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
-        .padding(.leading, 13)
+        .padding(.vertical, 3)
+        .padding(.leading, 14)
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(ClaudeTheme.accent)
-                .frame(width: 3)
+                .fill(ClaudeTheme.border)
+                .frame(width: 2)
         }
     }
 }
@@ -512,9 +513,9 @@ private func parseInlineMarkdown(
         let isItalic = intent.contains(.emphasized)
         switch (isBold, isItalic) {
         case (true, true):
-            result[run.range].font = .system(size: fontSize, weight: .bold).italic()
+            result[run.range].font = .system(size: fontSize, weight: .semibold).italic()
         case (true, false):
-            result[run.range].font = .system(size: fontSize, weight: .bold)
+            result[run.range].font = .system(size: fontSize, weight: .semibold)
         case (false, true):
             result[run.range].font = .system(size: fontSize, weight: baseWeight).italic()
         default:
@@ -582,7 +583,7 @@ private struct MarkdownTableView: View {
                         cellView(text: header, isHeader: true, column: column)
                     }
                 }
-                .background(ClaudeTheme.surfaceTertiary)
+                .background(ClaudeTheme.surfaceSecondary)
 
                 GridRow {
                     Rectangle()
@@ -604,7 +605,7 @@ private struct MarkdownTableView: View {
                     .background(
                         rowIndex.isMultiple(of: 2)
                             ? Color.clear
-                            : ClaudeTheme.surfaceTertiary.opacity(0.4)
+                            : ClaudeTheme.surfacePrimary.opacity(0.5)
                     )
                 }
             }
@@ -629,9 +630,9 @@ private struct MarkdownTableView: View {
             baseWeight: isHeader ? .semibold : .regular
         ))
         .foregroundStyle(ClaudeTheme.textPrimary)
-        .lineSpacing(2)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .lineSpacing(MarkdownTypography.bodyLineSpacing)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 7)
         .frame(
             minWidth: 80,
             maxWidth: .infinity,
@@ -641,7 +642,7 @@ private struct MarkdownTableView: View {
         .overlay(alignment: .leading) {
             if column > 0 {
                 Rectangle()
-                    .fill(Color.primary.opacity(0.12))
+                    .fill(ClaudeTheme.borderSubtle)
                     .frame(width: 0.5)
             }
         }
