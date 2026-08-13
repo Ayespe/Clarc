@@ -125,8 +125,8 @@
 "File Search" = "檔案搜尋";
 
 // MARK: - MessageListView
-"Show %lld earlier messages" = "顯示 %lld 則更早的訊息";
-"Collapse earlier messages" = "收合更早的訊息";
+"Conversation outline" = "對話目錄";
+"Attachment" = "附件";
 "%lld tools executed" = "已執行 %lld 個工具";
 "How can I help you?" = "有什麼可以幫你的嗎？";
 "Thinking..." = "正在思考...";

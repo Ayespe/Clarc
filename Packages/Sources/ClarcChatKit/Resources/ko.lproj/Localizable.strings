@@ -125,8 +125,8 @@
 "File Search" = "파일 검색";
 
 // MARK: - MessageListView
-"Show %lld earlier messages" = "%lld개 이전 메시지 보기";
-"Collapse earlier messages" = "이전 메시지 접기";
+"Conversation outline" = "대화 목차";
+"Attachment" = "첨부 파일";
 "%lld tools executed" = "%lld개 도구 실행됨";
 "How can I help you?" = "무엇을 도와드릴까요?";
 "Thinking..." = "생각하는 중...";

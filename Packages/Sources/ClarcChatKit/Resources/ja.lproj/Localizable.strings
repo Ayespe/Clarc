@@ -125,8 +125,8 @@
 "File Search" = "ファイル検索";
 
 // MARK: - MessageListView
-"Show %lld earlier messages" = "以前のメッセージ %lld 件を表示";
-"Collapse earlier messages" = "以前のメッセージを折りたたむ";
+"Conversation outline" = "会話の目次";
+"Attachment" = "添付ファイル";
 "%lld tools executed" = "%lld 件のツールを実行しました";
 "How can I help you?" = "何かお手伝いできることはありますか？";
 "Thinking..." = "考え中...";

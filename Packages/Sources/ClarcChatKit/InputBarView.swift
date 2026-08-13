@@ -58,7 +58,9 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
                 RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusPill)
                     .strokeBorder(ClaudeTheme.inputBorder, lineWidth: 1)
             )
-            .padding(.horizontal, 8)
+            .frame(maxWidth: 960)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 40)
             .padding(.top, 0)
             .padding(.bottom, 12)
             .sheet(item: $slashDetailCommand) { cmd in CommandDetailSheet(command: cmd) }

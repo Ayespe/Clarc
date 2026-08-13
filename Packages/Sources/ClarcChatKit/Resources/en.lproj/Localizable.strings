@@ -39,3 +39,7 @@
 "thinking.header.duration" = "Thought for %@";
 "thinking.header.redacted" = "Encrypted thought (redacted)";
 "thinking.header.segmentCount" = "%@ · %lld segments";
+
+// MARK: - MessageListView
+"Conversation outline" = "Conversation outline";
+"Attachment" = "Attachment";

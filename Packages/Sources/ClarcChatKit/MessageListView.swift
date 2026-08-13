@@ -6,134 +6,109 @@ import ClarcCore
 struct MessageListView: View {
     @Environment(ChatBridge.self) private var chatBridge
     @Environment(WindowState.self) private var windowState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scrollPosition = ScrollPosition()
     @State private var settledItems: [ChatMessage] = []
     @State private var scrollTask: Task<Void, Never>?
+    @State private var highlightTask: Task<Void, Never>?
     @State private var isNearBottom = true
-    @State private var isOlderCollapsed = true
     @State private var isSessionReady = false
-
-    private let foldThreshold = 30
+    @State private var highlightedMessageId: UUID?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Fold older messages when count exceeds threshold
-                if settledItems.count > foldThreshold {
-                    let hiddenCount = settledItems.count - foldThreshold
-
-                    // Expanded state: show older messages
-                    if !isOlderCollapsed {
-                        messageRows(settledItems.prefix(hiddenCount))
-                    }
-
-                    // Fold toggle button
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isOlderCollapsed.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Group {
-                                if isOlderCollapsed {
-                                    Text(String(format: String(localized: "Show %lld earlier messages", bundle: .module), hiddenCount))
-                                } else {
-                                    Text("Collapse earlier messages", bundle: .module)
-                                }
-                            }
-                            .font(.system(size: ClaudeTheme.size(12), weight: .medium))
-                            Image(systemName: isOlderCollapsed ? "chevron.down" : "chevron.up")
-                                .font(.system(size: ClaudeTheme.size(10), weight: .medium))
-                        }
-                        .foregroundStyle(ClaudeTheme.textTertiary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                                .fill(ClaudeTheme.surfacePrimary.opacity(0.6))
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    messageRows(settledItems.suffix(foldThreshold))
-                } else {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 16) {
                     messageRows(settledItems[...])
                 }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+                .padding(.horizontal, 44)
+                .padding(.top, 16)
 
-            // Streaming view is outside VStack — text deltas don't affect settled layout
-            VStack(spacing: 16) {
-                if !windowState.focusMode {
-                    StreamingMessageView {
-                        rebuildSettledItems()
-                        if isNearBottom { scrollToBottomDebounced() }
+                // Streaming view is outside VStack — text deltas don't affect settled layout
+                VStack(spacing: 16) {
+                    if !windowState.focusMode {
+                        StreamingMessageView {
+                            rebuildSettledItems()
+                            if isNearBottom { scrollToBottomDebounced() }
+                        }
+                    }
+
+                    if chatBridge.isStreaming {
+                        HStack(alignment: .top, spacing: 0) {
+                            StreamingIndicatorView(
+                                isThinking: chatBridge.isThinking,
+                                startDate: chatBridge.streamingStartDate
+                            )
+                            Spacer(minLength: 40)
+                        }
+                    }
+
+                    if !chatBridge.isStreaming && !settledItems.isEmpty {
+                        WebPreviewButton(messages: settledItems)
+                            .id("web-preview")
                     }
                 }
+                .padding(.horizontal, 44)
+                // Suppress layout animations when switching sessions so the pulse indicator
+                // doesn't visually jump as StreamingMessageView changes height.
+                .animation(.none, value: windowState.currentSessionId)
 
-                if chatBridge.isStreaming {
-                    HStack(alignment: .top, spacing: 0) {
-                        StreamingIndicatorView(
-                            isThinking: chatBridge.isThinking,
-                            startDate: chatBridge.streamingStartDate
-                        )
-                        Spacer(minLength: 40)
-                    }
-                }
-
-                if !chatBridge.isStreaming && !settledItems.isEmpty {
-                    WebPreviewButton(messages: settledItems)
-                        .id("web-preview")
-                }
+                Color.clear.frame(height: 1)
+                    .padding(.bottom, 16)
             }
-            .padding(.horizontal, 20)
-            // Suppress layout animations when switching sessions so the pulse indicator
-            // doesn't visually jump as StreamingMessageView changes height.
-            .animation(.none, value: windowState.currentSessionId)
-
-            Color.clear.frame(height: 1)
-                .padding(.bottom, 16)
-        }
-        .opacity(isSessionReady ? 1 : 0)
-        .scrollPosition($scrollPosition)
-        .defaultScrollAnchor(.bottom)
-        .onScrollGeometryChange(for: Bool.self) { geo in
-            let distanceFromBottom = geo.contentSize.height - geo.visibleRect.maxY
-            return distanceFromBottom < 120
-        } action: { _, nearBottom in
-            isNearBottom = nearBottom
-        }
-        .task(id: windowState.currentSessionId) {
-            isSessionReady = false
-            scrollTask?.cancel()
-            isOlderCollapsed = true
-            scrollPosition = ScrollPosition()
-            rebuildSettledItems()
-            // Skip scroll/fade delay for empty sessions — appear instantly
-            guard !settledItems.isEmpty else {
-                isSessionReady = true
-                return
+            .opacity(isSessionReady ? 1 : 0)
+            .scrollPosition($scrollPosition)
+            .defaultScrollAnchor(.bottom)
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                let distanceFromBottom = geo.contentSize.height - geo.visibleRect.maxY
+                return distanceFromBottom < 120
+            } action: { _, nearBottom in
+                isNearBottom = nearBottom
             }
-            try? await Task.sleep(for: .milliseconds(16))  // 1 frame: scroll after VStack layout is committed
-            scrollPosition.scrollTo(edge: .bottom)
-            // Pre-set isNearBottom so streaming messages that arrive before onScrollGeometryChange
-            // fires still trigger scrollToBottomDebounced(), keeping the pulse pinned to the bottom.
-            isNearBottom = true
-            try? await Task.sleep(for: .milliseconds(32))  // 2 frames: fade-in after scroll settles
-            withAnimation(.easeIn(duration: 0.15)) { isSessionReady = true }
-        }
-        .onChange(of: chatBridge.isStreaming) { old, new in
-            // Only update when streaming ends — settled list doesn't change at start, so skip
-            if old && !new {
+            .task(id: windowState.currentSessionId) {
+                isSessionReady = false
+                scrollTask?.cancel()
+                highlightTask?.cancel()
+                highlightedMessageId = nil
+                scrollPosition = ScrollPosition()
                 rebuildSettledItems()
-                scrollToBottomDebounced()
+                // Skip scroll/fade delay for empty sessions — appear instantly
+                guard !settledItems.isEmpty else {
+                    isSessionReady = true
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(16))  // 1 frame: scroll after VStack layout is committed
+                scrollPosition.scrollTo(edge: .bottom)
+                // Pre-set isNearBottom so streaming messages that arrive before onScrollGeometryChange
+                // fires still trigger scrollToBottomDebounced(), keeping the pulse pinned to the bottom.
+                isNearBottom = true
+                try? await Task.sleep(for: .milliseconds(32))  // 2 frames: fade-in after scroll settles
+                withAnimation(.easeIn(duration: 0.15)) { isSessionReady = true }
             }
-        }
-        .overlay {
-            if settledItems.isEmpty && !chatBridge.isStreaming && windowState.currentSessionId == nil {
-                EmptySessionView()
-                    .allowsHitTesting(false)
+            .onChange(of: chatBridge.isStreaming) { old, new in
+                // Only update when streaming ends — settled list doesn't change at start, so skip
+                if old && !new {
+                    rebuildSettledItems()
+                    scrollToBottomDebounced()
+                }
+            }
+            .overlay(alignment: .leading) {
+                if !userMessageOutlineItems.isEmpty {
+                    ConversationOutlineRail(
+                        items: userMessageOutlineItems,
+                        selectedMessageId: highlightedMessageId,
+                        onSelect: { messageId in
+                            jumpToMessage(messageId, using: proxy)
+                        }
+                    )
+                    .padding(.leading, 6)
+                }
+            }
+            .overlay {
+                if settledItems.isEmpty && !chatBridge.isStreaming && windowState.currentSessionId == nil {
+                    EmptySessionView()
+                        .allowsHitTesting(false)
+                }
             }
         }
     }
@@ -150,6 +125,14 @@ struct MessageListView: View {
             } else if let message = group.messages.first {
                 MessageBubble(message: message)
                     .id(message.id)
+                    .background {
+                        if highlightedMessageId == message.id {
+                            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
+                                .fill(ClaudeTheme.accent.opacity(0.08))
+                                .padding(.horizontal, -8)
+                                .padding(.vertical, -6)
+                        }
+                    }
             }
         }
     }
@@ -188,6 +171,161 @@ struct MessageListView: View {
             try? await Task.sleep(for: .milliseconds(50))
             guard !Task.isCancelled else { return }
             scrollPosition.scrollTo(edge: .bottom)
+        }
+    }
+
+    private var userMessageOutlineItems: [ConversationOutlineItem] {
+        settledItems.compactMap { message in
+            guard message.role == .user else { return nil }
+            return ConversationOutlineItem(message: message)
+        }
+    }
+
+    private func jumpToMessage(_ messageId: UUID, using proxy: ScrollViewProxy) {
+        highlightTask?.cancel()
+        highlightedMessageId = messageId
+        isNearBottom = false
+
+        if reduceMotion {
+            proxy.scrollTo(messageId, anchor: .top)
+        } else {
+            withAnimation(.easeInOut(duration: 0.45)) {
+                proxy.scrollTo(messageId, anchor: .top)
+            }
+        }
+
+        highlightTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 450 : 1_100))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                highlightedMessageId = nil
+            }
+        }
+    }
+}
+
+// MARK: - Conversation Outline
+
+struct ConversationOutlineItem: Identifiable, Equatable {
+    let id: UUID
+    let preview: String
+    let timestamp: Date
+
+    init(message: ChatMessage) {
+        id = message.id
+        timestamp = message.timestamp
+        preview = Self.previewText(for: message)
+    }
+
+    static func previewText(for message: ChatMessage) -> String {
+        let normalized = message.content
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !normalized.isEmpty { return normalized }
+        if let attachment = message.attachmentPaths.first { return attachment.name }
+        return String(localized: "Attachment", bundle: .module)
+    }
+}
+
+private struct ConversationOutlineRail: View {
+    let items: [ConversationOutlineItem]
+    let selectedMessageId: UUID?
+    let onSelect: (UUID) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            rail
+            if isHovered {
+                outlinePanel
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
+        }
+        .frame(maxHeight: 440)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                isHovered = hovering
+            }
+        }
+        .zIndex(20)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Conversation outline", bundle: .module))
+    }
+
+    private var rail: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    Capsule()
+                        .fill(item.id == selectedMessageId ? ClaudeTheme.accent : ClaudeTheme.textTertiary.opacity(0.55))
+                        .frame(width: railWidth(at: index), height: 2)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .frame(width: 28, maxHeight: 360, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var outlinePanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Conversation outline", bundle: .module)
+                .font(.system(size: ClaudeTheme.size(11), weight: .semibold))
+                .foregroundStyle(ClaudeTheme.textTertiary)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(items) { item in
+                        Button {
+                            onSelect(item.id)
+                        } label: {
+                            Text(item.preview)
+                                .font(.system(size: ClaudeTheme.size(13), weight: .medium))
+                                .foregroundStyle(item.id == selectedMessageId ? ClaudeTheme.textPrimary : ClaudeTheme.textSecondary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background {
+                                    if item.id == selectedMessageId {
+                                        RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
+                                            .fill(ClaudeTheme.accent.opacity(0.10))
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.bottom, 6)
+            }
+        }
+        .frame(width: 350, maxHeight: 430)
+        .background(
+            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
+                .fill(ClaudeTheme.surfaceElevated)
+                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
+                .strokeBorder(ClaudeTheme.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func railWidth(at index: Int) -> CGFloat {
+        switch index % 4 {
+        case 0: 20
+        case 1: 12
+        case 2: 17
+        default: 9
         }
     }
 }

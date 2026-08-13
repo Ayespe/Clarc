@@ -141,7 +141,7 @@ struct MessageBubble: View {
                 }
             }
             .frame(
-                maxWidth: message.role == .assistant ? 980 : .infinity,
+                maxWidth: message.role == .assistant ? 880 : 620,
                 alignment: message.role == .user ? .trailing : .leading
             )
 

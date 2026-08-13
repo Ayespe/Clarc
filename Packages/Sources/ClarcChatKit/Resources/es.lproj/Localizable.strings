@@ -125,8 +125,8 @@
 "File Search" = "Búsqueda de archivos";
 
 // MARK: - MessageListView
-"Show %lld earlier messages" = "Mostrar %lld mensajes anteriores";
-"Collapse earlier messages" = "Contraer mensajes anteriores";
+"Conversation outline" = "Índice de la conversación";
+"Attachment" = "Adjunto";
 "%lld tools executed" = "%lld herramientas ejecutadas";
 "How can I help you?" = "¿En qué puedo ayudarte?";
 "Thinking..." = "Pensando...";

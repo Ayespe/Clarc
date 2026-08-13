@@ -125,8 +125,8 @@
 "File Search" = "文件搜索";
 
 // MARK: - MessageListView
-"Show %lld earlier messages" = "显示 %lld 条更早的消息";
-"Collapse earlier messages" = "折叠更早的消息";
+"Conversation outline" = "对话目录";
+"Attachment" = "附件";
 "%lld tools executed" = "已执行 %lld 个工具";
 "How can I help you?" = "有什么可以帮你的吗？";
 "Thinking..." = "正在思考...";
