@@ -7,6 +7,7 @@ struct MessageListView: View {
     @Environment(ChatBridge.self) private var chatBridge
     @Environment(WindowState.self) private var windowState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var snapshot = ConversationSnapshot.empty
     @State private var scrollCoordinator = ConversationScrollCoordinator()
     @State private var isSessionReady = false
@@ -106,12 +107,17 @@ struct MessageListView: View {
                     scrollToBottomDebounced(using: proxy)
                 }
             }
+            .onChange(of: windowState.focusMode) { _, _ in
+                rebuildSnapshot()
+            }
             .overlay {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(scrollCoordinator.navigationVeilOpacity)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                if scrollCoordinator.navigationVeilOpacity > 0 {
+                    navigationVeil
+                        .opacity(scrollCoordinator.navigationVeilOpacity)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                }
             }
             .overlay {
                 if !snapshot.outlineItems.isEmpty {
@@ -147,6 +153,15 @@ struct MessageListView: View {
     }
 
     // MARK: - Helpers
+
+    @ViewBuilder
+    private var navigationVeil: some View {
+        if reduceTransparency {
+            Rectangle().fill(ClaudeTheme.background.opacity(0.96))
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
+    }
 
     @ViewBuilder
     private func messageRow(_ row: ConversationRow) -> some View {

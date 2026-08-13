@@ -31,6 +31,7 @@ struct UserManualView: View {
         }
         .frame(width: 900, height: 680)
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
     }
 
     // MARK: - Topic List
@@ -52,7 +53,7 @@ struct UserManualView: View {
             HStack(spacing: 12) {
                 Image(systemName: topic.icon)
                     .font(.title)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(ClaudeTheme.accent)
                 Text(LocalizedStringKey(topic.title))
                     .font(.title2)
                     .fontWeight(.bold)
@@ -91,14 +92,14 @@ struct UserManualView: View {
             if let note = section.note {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "info.circle.fill")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(ClaudeTheme.accent)
                         .font(.callout)
                     Text(LocalizedStringKey(note))
                         .font(.callout)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(ClaudeTheme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .clarcGlassSurface(.selection, cornerRadius: 12)
             }
         }
@@ -446,7 +447,7 @@ enum ManualTopic: String, CaseIterable, Identifiable {
                     items: [
                         KeyValueItem(key: "image", value: "Image data (PNG/TIFF) → attached as an image", symbolName: "photo", symbolColor: .blue),
                         KeyValueItem(key: "file", value: "File path → attached as a file", symbolName: "doc", symbolColor: .secondary),
-                        KeyValueItem(key: "url", value: "URL → attached as a URL reference", symbolName: "link", symbolColor: .accentColor),
+                        KeyValueItem(key: "url", value: "URL → attached as a URL reference", symbolName: "link", symbolColor: ClaudeTheme.accent),
                         KeyValueItem(key: "text", value: "Long text (>2 KB) → converted to a text attachment", symbolName: "text.alignleft", symbolColor: .secondary),
                     ],
                     note: "Screenshots can be pasted directly — they are automatically attached as images."
@@ -464,7 +465,7 @@ enum ManualTopic: String, CaseIterable, Identifiable {
                     title: "Auto-Preview Settings",
                     body: "By default, pasting certain content automatically creates a preview chip. You can toggle each category independently in Settings → Message.",
                     items: [
-                        KeyValueItem(key: "URL links", value: "Show a preview chip when a URL is detected", symbolName: "link", symbolColor: .accentColor),
+                        KeyValueItem(key: "URL links", value: "Show a preview chip when a URL is detected", symbolName: "link", symbolColor: ClaudeTheme.accent),
                         KeyValueItem(key: "File paths", value: "Show a preview chip when a file path is detected", symbolName: "doc", symbolColor: .secondary),
                         KeyValueItem(key: "Images", value: "Show a preview chip when image data is detected", symbolName: "photo", symbolColor: .blue),
                         KeyValueItem(key: "Long text", value: "Convert long text (200+ characters) into an attachment chip", symbolName: "text.alignleft", symbolColor: .secondary),
@@ -559,7 +560,7 @@ enum ManualTopic: String, CaseIterable, Identifiable {
                     body: "Click a plugin to view its details, then press Install. An interactive terminal popup opens and runs the install command automatically.",
                     items: [
                         KeyValueItem(key: "clock", value: "Not installed", symbolName: "clock", symbolColor: .secondary),
-                        KeyValueItem(key: "arrow.down", value: "Installing…", symbolName: "arrow.down.circle", symbolColor: .accentColor),
+                        KeyValueItem(key: "arrow.down", value: "Installing…", symbolName: "arrow.down.circle", symbolColor: ClaudeTheme.accent),
                         KeyValueItem(key: "checkmark", value: "Installed", symbolName: "checkmark.circle.fill", symbolColor: .green),
                     ],
                     note: "The catalog refreshes automatically every 5 minutes."

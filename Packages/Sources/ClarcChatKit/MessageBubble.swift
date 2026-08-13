@@ -142,10 +142,6 @@ struct MessageBubble: View {
                     : ChatLayout.userBubbleMaxWidth,
                 alignment: message.role == .user ? .trailing : .leading
             )
-
-            if message.role == .assistant {
-                Spacer(minLength: 40)
-            }
         }
     }
 

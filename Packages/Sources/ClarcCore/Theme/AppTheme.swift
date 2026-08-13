@@ -293,12 +293,17 @@ private struct ClarcGlassSurfaceModifier: ViewModifier {
         if #available(macOS 26.0, *) {
             if reduceTransparency {
                 legacySurface(content: content, shape: shape, radius: radius, useMaterial: false)
-            } else {
+            } else if role.usesLiveMaterial {
                 content
                     .background(role.tint.opacity(0.34), in: shape)
                     .glassEffect(.regular, in: shape)
                     .overlay(edge(for: shape))
                     .shadow(color: ClarcDesignTokens.shadow, radius: role.shadowRadius, y: role.shadowRadius * 0.35)
+            } else {
+                // Scrolling rows and compact controls intentionally stay on a
+                // static tinted surface. Applying native glass to every lazy
+                // list item forces repeated backdrop sampling while scrolling.
+                legacySurface(content: content, shape: shape, radius: radius, useMaterial: false)
             }
         } else {
             legacySurface(content: content, shape: shape, radius: radius, useMaterial: role.usesLiveMaterial)
@@ -349,6 +354,7 @@ private struct ClarcGlassSurfaceModifier: ViewModifier {
                         .stroke(ClarcDesignTokens.edgeLowlight, lineWidth: 0.5)
                 }
             }
+            .allowsHitTesting(false)
     }
 }
 

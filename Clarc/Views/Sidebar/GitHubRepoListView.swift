@@ -20,6 +20,7 @@ struct GitHubRepoListView: View {
                 connectPrompt
             }
         }
+        .tint(ClaudeTheme.accent)
     }
 
     // MARK: - Header

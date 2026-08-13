@@ -59,6 +59,7 @@ struct GitHubSheet: View {
         }
         .frame(width: 480, height: 520)
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
         .focusable(false)
         .task {
             if appState.isLoggedIn, appState.repos.isEmpty {

@@ -70,6 +70,7 @@ struct MainWindowRoot: View {
     var body: some View {
         MainView()
             .preferredColorScheme(appState.appearanceMode.preferredColorScheme)
+            .tint(ClaudeTheme.accent)
             .environment(appState)
             .environment(windowState)
             .environment(chatBridge)
@@ -105,6 +106,7 @@ struct SettingsWindowRoot: View {
     var body: some View {
         SettingsView()
             .preferredColorScheme(appState.appearanceMode.preferredColorScheme)
+            .tint(ClaudeTheme.accent)
             .environment(appState)
             .environment(windowState)
     }
@@ -121,6 +123,7 @@ struct ProjectWindowRoot: View {
     var body: some View {
         ProjectWindowView()
             .preferredColorScheme(appState.appearanceMode.preferredColorScheme)
+            .tint(ClaudeTheme.accent)
             .environment(appState)
             .environment(windowState)
             .environment(chatBridge)

@@ -28,6 +28,7 @@ struct ProjectListView: View {
                 projectList
             }
         }
+        .tint(ClaudeTheme.accent)
         .onAppear {
             restoreExpandedProjects()
             if let id = windowState.selectedProject?.id {
@@ -401,6 +402,7 @@ struct RenameProjectSheet: View {
             }
         }
         .padding(24)
+        .tint(ClaudeTheme.accent)
     }
 
     private func confirm() {

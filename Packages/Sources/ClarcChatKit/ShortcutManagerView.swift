@@ -35,6 +35,7 @@ public struct ShortcutManagerView: View {
             }
         }
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
         .focusable(false)
         .sheet(item: $editingShortcut) { shortcut in
             ShortcutEditView(
@@ -98,7 +99,7 @@ public struct ShortcutManagerView: View {
                     .font(.system(size: ClaudeTheme.size(12), weight: .medium))
             }
             .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(ClaudeTheme.accent)
 
             Button {
                 dismiss()
@@ -144,7 +145,7 @@ public struct ShortcutManagerView: View {
                     .font(.system(size: ClaudeTheme.size(12), weight: .medium))
             }
             .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(ClaudeTheme.accent)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -402,6 +403,7 @@ struct ShortcutEditView: View {
         }
         .frame(width: 480, height: 520)
         .clarcGlassSurface(.popover, cornerRadius: 18)
+        .tint(ClaudeTheme.accent)
         .focusable(false)
         .onAppear {
             if let s = shortcut {

@@ -38,6 +38,7 @@ struct SettingsView: View {
         }
         .frame(width: 680, height: 620)
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
         .focusable(false)
         .onAppear { selectedTab = 0 }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in

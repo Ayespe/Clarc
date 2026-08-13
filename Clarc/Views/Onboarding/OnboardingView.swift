@@ -23,6 +23,7 @@ struct OnboardingView: View {
         .padding(.horizontal, 40)
         .frame(width: 560, height: 420)
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
         .task {
             await checkCLI()
         }

@@ -47,6 +47,7 @@ public struct SlashCommandManagerView: View {
             }
         }
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
         .focusable(false)
         .sheet(item: $editingCommand) { cmd in
             SlashCommandEditView(
@@ -129,7 +130,7 @@ public struct SlashCommandManagerView: View {
                     .font(.system(size: ClaudeTheme.size(12), weight: .medium))
             }
             .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(ClaudeTheme.accent)
 
             Button {
                 dismiss()
@@ -184,7 +185,7 @@ public struct SlashCommandManagerView: View {
                     .font(.system(size: ClaudeTheme.size(12), weight: .medium))
             }
             .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(ClaudeTheme.accent)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -272,10 +273,10 @@ public struct SlashCommandManagerView: View {
                     if cmd.isInteractive {
                         Text("terminal", bundle: .module)
                             .font(.system(size: ClaudeTheme.size(9)))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(ClaudeTheme.accent)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(Color.accentColor.opacity(0.08), in: Capsule())
+                            .background(ClaudeTheme.accent.opacity(0.08), in: Capsule())
                     }
                 }
 
@@ -587,6 +588,7 @@ struct SlashCommandEditView: View {
         }
         .frame(width: 520, height: 520)
         .clarcGlassSurface(.popover, cornerRadius: 18)
+        .tint(ClaudeTheme.accent)
         .focusable(false)
         .onAppear {
             if let cmd = command {

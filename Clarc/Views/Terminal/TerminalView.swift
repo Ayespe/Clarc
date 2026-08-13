@@ -31,6 +31,8 @@ final class TerminalProcess {
 
 struct EmbeddedTerminalView: NSViewRepresentable {
 
+    @Environment(\.colorScheme) private var colorScheme
+
     let executable: String
     let arguments: [String]
     var environment: [String]?
@@ -44,12 +46,9 @@ struct EmbeddedTerminalView: NSViewRepresentable {
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let tv = LocalProcessTerminalView(frame: .zero)
 
-        // Set terminal background/foreground colors from the active theme.
-        let themeColors = ThemeStore.shared.colors
-        tv.nativeBackgroundColor = NSColor(themeColors.codeBackground)
-            .usingColorSpace(.sRGB) ?? NSColor.black
-        tv.nativeForegroundColor = NSColor(themeColors.textPrimary)
-            .usingColorSpace(.sRGB) ?? NSColor.white
+        // SwiftTerm keeps concrete AppKit colors rather than SwiftUI's dynamic
+        // Color values, so resolve them for the current appearance explicitly.
+        applyTheme(to: tv)
 
         tv.processDelegate = context.coordinator
         tv.startProcess(
@@ -74,6 +73,11 @@ struct EmbeddedTerminalView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+        // `preferredColorScheme` and System appearance changes both invalidate
+        // this representable. Re-assign SwiftTerm's concrete colors in place so
+        // the process and scrollback survive an appearance switch.
+        applyTheme(to: nsView)
+
         if let reset = resetTrigger, reset != context.coordinator.lastResetTrigger {
             context.coordinator.lastResetTrigger = reset
             // Restart the shell on the same NSView to avoid recreating the SwiftUI view
@@ -100,6 +104,29 @@ struct EmbeddedTerminalView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onTerminated: onProcessTerminated)
+    }
+
+    private func applyTheme(to terminalView: LocalProcessTerminalView) {
+        let colors = ThemeStore.shared.colors
+        terminalView.nativeBackgroundColor = resolvedColor(
+            colors.codeBackground,
+            fallback: colorScheme == .dark ? .black : .white
+        )
+        terminalView.nativeForegroundColor = resolvedColor(
+            colors.textPrimary,
+            fallback: colorScheme == .dark ? .white : .black
+        )
+        terminalView.needsDisplay = true
+    }
+
+    private func resolvedColor(_ color: Color, fallback: NSColor) -> NSColor {
+        let appearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
+        guard let appearance = NSAppearance(named: appearanceName) else { return fallback }
+        var resolved = fallback
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = NSColor(color).usingColorSpace(.sRGB) ?? fallback
+        }
+        return resolved
     }
 
     /// Build an environment array that guarantees UTF-8 locale so Korean and other

@@ -24,6 +24,7 @@ struct SkillMarketView: View {
                     .clarcGlassSurface(.popover, cornerRadius: 20)
             }
         }
+        .tint(ClaudeTheme.accent)
         .task {
             if appState.marketplaceCatalog.isEmpty {
                 await appState.loadMarketplace()
@@ -57,7 +58,7 @@ struct SkillMarketView: View {
         HStack(spacing: 10) {
             Image(systemName: "brain.head.profile")
                 .font(.system(size: ClaudeTheme.size(16)))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(ClaudeTheme.accent)
 
             Text("Skill Marketplace")
                 .font(.system(size: ClaudeTheme.size(15), weight: .semibold))
@@ -231,10 +232,10 @@ struct PluginCard: View {
             HStack(spacing: 4) {
                 Text(plugin.categoryLabel)
                     .font(.system(size: ClaudeTheme.size(10), weight: .medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(ClaudeTheme.accent)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.08))
+                    .background(ClaudeTheme.accent.opacity(0.08))
                     .clipShape(Capsule())
 
                 Text(plugin.marketplaceLabel)
@@ -374,10 +375,10 @@ struct PluginDetailView: View {
                     HStack(spacing: 6) {
                         Text(plugin.categoryLabel)
                             .font(.system(size: ClaudeTheme.size(11), weight: .medium))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(ClaudeTheme.accent)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color.accentColor.opacity(0.08))
+                            .background(ClaudeTheme.accent.opacity(0.08))
                             .clipShape(Capsule())
 
                         Text(plugin.sourceType.rawValue)
@@ -430,6 +431,7 @@ struct PluginDetailView: View {
         }
         .frame(width: 620, height: 500)
         .clarcWindowCanvas()
+        .tint(ClaudeTheme.accent)
         .sheet(item: $terminalState) { terminal in
             InteractiveTerminalPopup(state: terminal)
                 .onDisappear {
