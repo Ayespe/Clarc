@@ -109,17 +109,18 @@ final class AppState {
 
     var allSessionSummaries: [ChatSession.Summary] = []
 
-    // MARK: - Theme
+    // MARK: - Appearance
 
-    var selectedTheme: AppTheme = AppTheme(rawValue: UserDefaults.standard.string(forKey: "selectedTheme") ?? "") ?? .claude {
+    /// Clarc has a single Claude-inspired palette. This preference only controls
+    /// whether the palette follows macOS or resolves explicitly to light/dark.
+    var appearanceMode: AppearanceMode = AppearanceMode(
+        rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? ""
+    ) ?? .system {
         didSet {
-            UserDefaults.standard.set(selectedTheme.rawValue, forKey: "selectedTheme")
-            ThemeStore.shared.current = selectedTheme
-            themeRevision += 1
+            UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
+            ThemeStore.shared.appearanceMode = appearanceMode
         }
     }
-    /// Incrementing causes NavigationSplitView to rebuild and immediately apply theme colors
-    var themeRevision: Int = 0
 
     // MARK: - Font Size
 
@@ -127,7 +128,6 @@ final class AppState {
         didSet {
             UserDefaults.standard.set(fontSizeAdjustment, forKey: "fontSizeAdjustment")
             ThemeStore.shared.fontSizeAdjustment = fontSizeAdjustment
-            themeRevision += 1
         }
     }
 
@@ -145,7 +145,6 @@ final class AppState {
         didSet {
             UserDefaults.standard.set(messageFontSizeAdjustment, forKey: "messageFontSizeAdjustment")
             ThemeStore.shared.messageFontSizeAdjustment = messageFontSizeAdjustment
-            themeRevision += 1
         }
     }
 
@@ -689,7 +688,7 @@ final class AppState {
 
     /// Once per app launch — start services and load shared data
     func initialize() async {
-        ThemeStore.shared.current = selectedTheme
+        ThemeStore.shared.appearanceMode = appearanceMode
         ThemeStore.shared.fontSizeAdjustment = fontSizeAdjustment
         ThemeStore.shared.messageFontSizeAdjustment = messageFontSizeAdjustment
 

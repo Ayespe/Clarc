@@ -6,6 +6,7 @@ import ClarcChatKit
 struct MainView: View {
     @Environment(AppState.self) private var appState
     @Environment(WindowState.self) private var windowState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showGitHubSheet = false
     @State private var showFilePicker = false
     @Environment(\.openSettings) private var openSettings
@@ -69,7 +70,7 @@ struct MainView: View {
                             Color.black.opacity(0.3)
                                 .ignoresSafeArea()
                                 .onTapGesture {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
                                         windowState.showMarketplace = false
                                     }
                                 }
@@ -88,7 +89,6 @@ struct MainView: View {
                             .zIndex(20)
                     }
                 }
-                .id(appState.themeRevision)
                 .onChange(of: windowState.showInspector) { _, isShowing in
                     if isShowing, !inspectorStarted { inspectorStarted = true }
                 }
@@ -174,7 +174,7 @@ struct MainView: View {
                 GitStatusView(projectPath: project.path)
             }
         }
-        .background(ClaudeTheme.sidebarBackground)
+        .clarcGlassSurface(.sidebar, cornerRadius: 0)
         .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 360)
         .sheet(isPresented: $showGitHubSheet) {
             GitHubSheet()
@@ -218,7 +218,7 @@ struct MainView: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(ClaudeTheme.background)
+                    .clarcWindowCanvas()
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "sparkle")
@@ -234,7 +234,7 @@ struct MainView: View {
                         .foregroundStyle(ClaudeTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(ClaudeTheme.background)
+                .clarcWindowCanvas()
             }
         }
         .sheet(item: Bindable(windowState).inspectorFile) { file in
@@ -311,29 +311,33 @@ struct DetailToolbar: View {
 struct InspectorTabControl: View {
     @Binding var selection: InspectorTab
     var onTabClick: (InspectorTab) -> Void = { _ in }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(InspectorTab.allCases, id: \.self) { tab in
                 Button {
-                    selection = tab
-                    onTabClick(tab)
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                        selection = tab
+                        onTabClick(tab)
+                    }
                 } label: {
                     Text(LocalizedStringKey(tab.rawValue))
                         .font(.system(size: ClaudeTheme.size(13), weight: .medium))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .contentShape(Rectangle())
-                        .foregroundStyle(selection == tab ? ClaudeTheme.textOnAccent : ClaudeTheme.textSecondary)
+                        .foregroundStyle(selection == tab ? ClaudeTheme.textPrimary : ClaudeTheme.textSecondary)
                         .background(
-                            selection == tab ? ClaudeTheme.accent : Color.clear,
+                            selection == tab ? ClaudeTheme.accentSubtle : Color.clear,
                             in: RoundedRectangle(cornerRadius: 6)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .background(ClaudeTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
+        .padding(2)
+        .clarcGlassSurface(.control, cornerRadius: ClaudeTheme.cornerRadiusSmall)
     }
 }
 
@@ -367,7 +371,7 @@ struct InspectorPanel: View {
 
     var body: some View {
         content
-            .background(ClaudeTheme.surfaceElevated)
+            .clarcGlassSurface(.inspector, cornerRadius: 0)
             .modifier(InspectorPositionModifier(position: position, visible: windowState.showInspector))
             .onChange(of: windowState.inspectorTab) { _, newTab in
                 if !showBoth { bumpFocus(for: newTab) }
@@ -532,12 +536,13 @@ private struct InspectorIconButton: View {
 struct ClaudeSegmentedControl: View {
     @Binding var selection: MainView.SidebarTab
     var tabs: [MainView.SidebarTab] = MainView.SidebarTab.allCases
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(tabs, id: \.self) { tab in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { selection = tab }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { selection = tab }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: tab.icon)
@@ -548,9 +553,9 @@ struct ClaudeSegmentedControl: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 5)
                     .contentShape(Rectangle())
-                    .foregroundStyle(selection == tab ? ClaudeTheme.textOnAccent : ClaudeTheme.textSecondary)
+                    .foregroundStyle(selection == tab ? ClaudeTheme.textPrimary : ClaudeTheme.textSecondary)
                     .background(
-                        selection == tab ? ClaudeTheme.accent : Color.clear,
+                        selection == tab ? ClaudeTheme.accentSubtle : Color.clear,
                         in: RoundedRectangle(cornerRadius: 6)
                     )
                 }
@@ -558,7 +563,7 @@ struct ClaudeSegmentedControl: View {
             }
         }
         .padding(2)
-        .background(ClaudeTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
+        .clarcGlassSurface(.control, cornerRadius: ClaudeTheme.cornerRadiusSmall)
     }
 }
 
@@ -570,13 +575,14 @@ struct SidebarTabShortcuts: View {
     @Binding var columnVisibility: NavigationSplitViewVisibility
     var firstTab: MainView.SidebarTab = .projects
     var secondTab: MainView.SidebarTab = .sessions
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
             .background {
                 Button("") {
-                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = .files }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { sidebarTab = .files }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { fileSearchTrigger.toggle() }
                 }
                 .keyboardShortcut("f", modifiers: .command)
@@ -584,14 +590,14 @@ struct SidebarTabShortcuts: View {
 
                 Button("") {
                     columnVisibility = .all
-                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = firstTab }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { sidebarTab = firstTab }
                 }
                 .keyboardShortcut("1", modifiers: .command)
                 .hidden()
 
                 Button("") {
                     columnVisibility = .all
-                    withAnimation(.easeInOut(duration: 0.15)) { sidebarTab = secondTab }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { sidebarTab = secondTab }
                 }
                 .keyboardShortcut("2", modifiers: .command)
                 .hidden()
@@ -725,6 +731,7 @@ struct ToolbarChipLabel: View {
     let title: String
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Text(LocalizedStringKey(title))
@@ -732,17 +739,16 @@ struct ToolbarChipLabel: View {
         .foregroundStyle(ClaudeTheme.textSecondary)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(
-            isHovered ? ClaudeTheme.surfaceTertiary : ClaudeTheme.surfaceSecondary,
-            in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                .strokeBorder(ClaudeTheme.borderSubtle, lineWidth: 0.5)
-        )
+        .clarcGlassSurface(.control, cornerRadius: ClaudeTheme.cornerRadiusSmall)
+        .overlay {
+            if isHovered {
+                RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
+                    .fill(ClaudeTheme.accentSubtle)
+            }
+        }
         .onHover { isHovered = $0 }
         .pointerCursorOnHover()
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.11), value: isHovered)
     }
 }
 
@@ -751,6 +757,7 @@ struct ComposerControlLabel: View {
     let isAccent: Bool
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -762,19 +769,20 @@ struct ComposerControlLabel: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
         .background(
-            isHovered ? ClaudeTheme.surfaceSecondary.opacity(0.85) : Color.clear,
+            isHovered ? ClaudeTheme.accentSubtle : Color.clear,
             in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
         )
         .contentShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
         .onHover { isHovered = $0 }
         .pointerCursorOnHover()
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.11), value: isHovered)
     }
 }
 
 struct ChatDetailModifiers: ViewModifier {
     @Environment(AppState.self) private var appState
     @Environment(WindowState.self) private var windowState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -783,11 +791,14 @@ struct ChatDetailModifiers: ViewModifier {
                     ZStack {
                         Color.black.opacity(0.4).ignoresSafeArea()
                         PermissionModal(request: request)
-                            .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusLarge))
+                            .clarcGlassSurface(.popover, cornerRadius: ClaudeTheme.cornerRadiusLarge)
                             .shadow(color: ClaudeTheme.shadowColor, radius: 20)
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.85), value: windowState.pendingPermissions.count)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85),
+                        value: windowState.pendingPermissions.count
+                    )
                 }
             }
             .sheet(isPresented: Bindable(windowState).showModelPicker) {
@@ -845,8 +856,10 @@ struct ModelPickerSheet: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(index == selectedIndex ? ClaudeTheme.accentSubtle : ClaudeTheme.surfacePrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
+                    .clarcGlassSurface(
+                        index == selectedIndex ? .selection : .control,
+                        cornerRadius: ClaudeTheme.cornerRadiusSmall
+                    )
                     .onTapGesture {
                         appState.setSessionModel(model, in: windowState)
                         dismiss()
@@ -860,7 +873,7 @@ struct ModelPickerSheet: View {
         }
         .padding(20)
         .frame(width: 380)
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
         .focusable()
         .focused($isFocused)
         .onKeyPress(.upArrow) {
@@ -933,8 +946,10 @@ struct EffortPickerSheet: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(index == selectedIndex ? ClaudeTheme.accentSubtle : ClaudeTheme.surfacePrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
+                    .clarcGlassSurface(
+                        index == selectedIndex ? .selection : .control,
+                        cornerRadius: ClaudeTheme.cornerRadiusSmall
+                    )
                     .onTapGesture {
                         appState.setSessionEffort(effort, in: windowState)
                         dismiss()
@@ -948,7 +963,7 @@ struct EffortPickerSheet: View {
         }
         .padding(20)
         .frame(width: 300)
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
         .focusable()
         .focused($isFocused)
         .onKeyPress(.upArrow) {

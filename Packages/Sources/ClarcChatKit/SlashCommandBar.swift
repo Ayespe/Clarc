@@ -582,12 +582,7 @@ struct SlashCommandPopup: View {
                 }
             }
             .frame(height: 320)
-            .background(ClaudeTheme.surfaceElevated)
-            .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium))
-            .overlay(
-                RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
-                    .strokeBorder(ClaudeTheme.border, lineWidth: 1)
-            )
+            .clarcGlassSurface(.popover, cornerRadius: ClaudeTheme.cornerRadiusMedium)
             .shadow(color: ClaudeTheme.shadowColor, radius: 12, y: -4)
             .sheet(item: $detailCommand) { cmd in
                 CommandDetailSheet(command: cmd)
@@ -708,7 +703,7 @@ struct CommandDetailSheet: View {
             .padding(16)
         }
         .frame(width: 520, height: 480)
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
     }
 }
 
@@ -884,12 +879,7 @@ struct AtFilePopup: View {
             }
         }
         .frame(height: 320)
-        .background(ClaudeTheme.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium))
-        .overlay(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
-                .strokeBorder(ClaudeTheme.border, lineWidth: 1)
-        )
+        .clarcGlassSurface(.popover, cornerRadius: ClaudeTheme.cornerRadiusMedium)
         .shadow(color: ClaudeTheme.shadowColor, radius: 12, y: -4)
     }
 

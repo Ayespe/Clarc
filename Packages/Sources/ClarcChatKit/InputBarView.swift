@@ -5,6 +5,7 @@ import ClarcCore
 struct InputBarView<Accessory: View, TopAccessory: View>: View {
     @Environment(ChatBridge.self) private var chatBridge
     @Environment(WindowState.self) private var windowState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isInputFocused: Bool = false
     @State private var inputFocusTrigger: UUID? = nil
 
@@ -35,44 +36,56 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             if !windowState.attachments.isEmpty {
-                attachmentPreviews
-                    .padding(.horizontal, 16)
+                CenteredChatTrack(maxWidth: ChatLayout.composerMaxWidth) {
+                    attachmentPreviews
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                     .transition(.offset(y: 10).combined(with: .opacity))
             }
 
             if !windowState.messageQueue.isEmpty {
-                queuedMessagePreviews
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                CenteredChatTrack(maxWidth: ChatLayout.composerMaxWidth) {
+                    queuedMessagePreviews
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            topAccessory
-
-            inputComposer
-            .padding(.horizontal, 14)
-            .padding(.top, 16)
-            .padding(.bottom, 10)
-            .background(ClaudeTheme.inputBackground)
-            .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusPill))
-            .overlay(
-                RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusPill)
-                    .strokeBorder(ClaudeTheme.inputBorder, lineWidth: 1)
-            )
-            .frame(maxWidth: 960)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 40)
-            .padding(.top, 0)
-            .padding(.bottom, 12)
-            .sheet(item: $slashDetailCommand) { cmd in CommandDetailSheet(command: cmd) }
-            .sheet(item: $textPreviewAttachment) { attachment in TextPreviewSheet(attachment: attachment) }
-            .onDrop(of: [.fileURL, .image], isTargeted: $isDragOver) { providers in
-                processItemProviders(providers)
-                return true
+            CenteredChatTrack(maxWidth: ChatLayout.composerMaxWidth) {
+                topAccessory
+                    .frame(maxWidth: .infinity)
             }
-            .overlay { dragOverlay }
+
+            CenteredChatTrack(maxWidth: ChatLayout.composerMaxWidth) {
+                inputComposer
+                    .padding(.horizontal, 14)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: .infinity)
+                    .clarcGlassSurface(.composer, cornerRadius: 26)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .strokeBorder(
+                                isInputFocused ? ClaudeTheme.accent.opacity(0.72) : Color.clear,
+                                lineWidth: 1
+                            )
+                    }
+                    .animation(
+                        reduceMotion ? nil : .easeOut(duration: 0.14),
+                        value: isInputFocused
+                    )
+                    .sheet(item: $slashDetailCommand) { cmd in CommandDetailSheet(command: cmd) }
+                    .sheet(item: $textPreviewAttachment) { attachment in TextPreviewSheet(attachment: attachment) }
+                    .onDrop(of: [.fileURL, .image], isTargeted: $isDragOver) { providers in
+                        processItemProviders(providers)
+                        return true
+                    }
+                    .overlay { dragOverlay }
+            }
+            .padding(.bottom, 12)
         }
         .overlay(alignment: .top) {
-            HStack(alignment: .top, spacing: 0) {
+            CenteredChatTrack(maxWidth: ChatLayout.composerMaxWidth) {
                 VStack(spacing: 4) {
                     if showSlashPopup && !slashFilteredCommands.isEmpty {
                         SlashCommandPopup(
@@ -92,10 +105,8 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
             }
-            .padding(.horizontal, 16)
-            .offset(y: -4)
+            .offset(y: -6)
             // Show floating popups above the input bar by mapping top guide to bottom.
             .alignmentGuide(.top) { $0[.bottom] }
         }
@@ -163,7 +174,7 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
             if chatBridge.isStreaming {
                 ClaudeSendButton(
                     isEnabled: true,
-                    systemImageName: "stop.fill",
+                    role: .stop,
                     accessibilityLabel: String(localized: "Stop streaming (cancel response generation)", bundle: .module)
                 ) {
                     Task { await chatBridge.cancelStreaming() }
@@ -211,6 +222,7 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
             text: Bindable(windowState).inputText,
             isFocused: $isInputFocused,
             hasMarkedText: $inputHasMarkedText,
+            measuredContentHeight: $measuredInputHeight,
             focusTrigger: inputFocusTrigger,
             font: .systemFont(ofSize: ClaudeTheme.size(14)),
             textColor: NSColor(ClaudeTheme.textPrimary),
@@ -228,7 +240,6 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
             handleInputTextChange(oldValue: oldValue, newValue: newValue)
         }
         .frame(height: clampedInputHeight)
-        .background(InputHeightMeasurer(text: windowState.inputText, measuredHeight: $measuredInputHeight))
     }
 
     private var clampedInputHeight: CGFloat {
@@ -261,13 +272,13 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
         let hasSpaceAfterSlash = newValue.contains(" ")
         let shouldShowSlash = trimmed.hasPrefix("/") && !hasSpaceAfterSlash
         if shouldShowSlash != showSlashPopup {
-            withAnimation(.easeOut(duration: 0.15)) { showSlashPopup = shouldShowSlash }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { showSlashPopup = shouldShowSlash }
         }
         if shouldShowSlash { slashSelectedIndex = 0 }
 
         let shouldShowAt = !shouldShowSlash && hasActiveAtQuery(in: newValue)
         if shouldShowAt != showAtFilePopup {
-            withAnimation(.easeOut(duration: 0.15)) { showAtFilePopup = shouldShowAt }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { showAtFilePopup = shouldShowAt }
         }
         if shouldShowAt { atFileSelectedIndex = 0 }
     }
@@ -483,11 +494,11 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
 
     private func handleEscapeKey() -> Bool {
         if showAtFilePopup {
-            withAnimation(.easeOut(duration: 0.15)) { showAtFilePopup = false }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { showAtFilePopup = false }
             return true
         }
         if showSlashPopup {
-            withAnimation(.easeOut(duration: 0.15)) { showSlashPopup = false }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { showSlashPopup = false }
             return true
         }
         if chatBridge.isStreaming {
@@ -528,7 +539,7 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
     }
 
     private func selectSlashCommand(_ cmd: SlashCommand) {
-        withAnimation(.easeOut(duration: 0.15)) { showSlashPopup = false }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { showSlashPopup = false }
         if cmd.acceptsInput && !cmd.isInteractive {
             windowState.inputText = cmd.command + " "
         } else {
@@ -538,7 +549,7 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
     }
 
     private func selectAtFile(_ relativePath: String) {
-        withAnimation(.easeOut(duration: 0.15)) { showAtFilePopup = false }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { showAtFilePopup = false }
         var text = windowState.inputText
         if let atRange = text.range(of: "@", options: .backwards) {
             text.replaceSubrange(atRange.lowerBound..., with: "@\(relativePath) ")
@@ -597,10 +608,8 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
+                .clarcGlassSurface(.floating, cornerRadius: 18)
                 .frame(maxWidth: 350, alignment: .trailing)
-                .opacity(0.9)
             }
         }
         .padding(.trailing, 14)
@@ -608,7 +617,7 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
     }
 
     private func removeQueuedMessage(_ id: UUID) {
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
             windowState.dequeueMessage(id: id)
         }
     }
@@ -646,7 +655,7 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
         historyIndex = -1
 
         if chatBridge.isStreaming {
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                 windowState.enqueueMessage(text: windowState.inputText, attachments: windowState.attachments)
             }
             windowState.inputText = ""
@@ -738,44 +747,5 @@ struct InputBarView<Accessory: View, TopAccessory: View>: View {
                 windowState.addAttachment(attachment)
             }
         }
-    }
-}
-
-// IMETextView's NSScrollView doesn't surface intrinsic height, so a hidden Text at the same
-// width/font reports the wrapped height that drives clampedInputHeight.
-private struct InputHeightMeasurer: View {
-    let text: String
-    @Binding var measuredHeight: CGFloat
-
-    var body: some View {
-        GeometryReader { geo in
-            Text(measuringText)
-                .font(.system(size: ClaudeTheme.size(14)))
-                .frame(width: geo.size.width, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(heightReporter)
-                .hidden()
-                .allowsHitTesting(false)
-        }
-    }
-
-    private var heightReporter: some View {
-        GeometryReader { inner in
-            Color.clear
-                .onAppear { measuredHeight = inner.size.height }
-                .onChange(of: inner.size.height) { _, h in
-                    measuredHeight = h
-                }
-        }
-    }
-
-    // A trailing \n has zero intrinsic height when rendered through Text, so append a space to
-    // force the empty final line to be measured. Cap input length: clampedInputHeight saturates
-    // at 10 lines (~200pt), so once the text definitely exceeds that we don't need exact height
-    // and can avoid laying out arbitrarily large pasted buffers on every keystroke.
-    private var measuringText: String {
-        if text.isEmpty { return " " }
-        let capped = text.count > 2000 ? String(text.prefix(2000)) : text
-        return capped.hasSuffix("\n") ? capped + " " : capped
     }
 }

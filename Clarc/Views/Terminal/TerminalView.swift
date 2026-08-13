@@ -228,7 +228,7 @@ struct InteractiveTerminalPopup: View {
             .frame(minHeight: 700)
         }
         .frame(minWidth: 800, idealWidth: 900, minHeight: 760, idealHeight: 860)
-        .background(ClaudeTheme.surfaceElevated)
+        .clarcGlassSurface(.popover, cornerRadius: 18)
         .onAppear {
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 // keyCode 53 = Escape

@@ -4,9 +4,29 @@ import AppKit
 // MARK: - Syntax Highlighter
 
 public enum SyntaxHighlighter {
+    /// The semantic token cache is appearance-independent. Final SwiftUI and
+    /// AppKit attributes are recreated for every call, so font-size and
+    /// appearance changes can never revive stale colors or fonts.
+    static let cacheCostLimitBytes = 16 * 1024 * 1024
+
+    struct CacheStatistics: Sendable, Equatable {
+        var hits = 0
+        var misses = 0
+    }
+
+    private static let tokenCache = TokenCache(costLimit: cacheCostLimitBytes)
+
+    static var cacheStatistics: CacheStatistics {
+        tokenCache.statistics
+    }
+
+    static func resetCacheForTesting() {
+        tokenCache.reset()
+    }
+
     public static func highlightNS(_ code: String, language: String, fontSize: CGFloat = 12) -> NSAttributedString {
         let normalized = normalizeLanguage(language)
-        let tokens = tokenize(code, language: normalized)
+        let tokens = cachedTokens(code, language: normalized)
         let result = NSMutableAttributedString()
         let regularFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let mediumFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .medium)
@@ -23,7 +43,7 @@ public enum SyntaxHighlighter {
     public static func highlight(_ code: String, language: String, fontSize: CGFloat = 12) -> AttributedString {
         let normalized = normalizeLanguage(language)
         var result = AttributedString()
-        let tokens = tokenize(code, language: normalized)
+        let tokens = cachedTokens(code, language: normalized)
 
         for token in tokens {
             var attributed = AttributedString(token.text)
@@ -37,6 +57,43 @@ public enum SyntaxHighlighter {
         }
 
         return result
+    }
+
+    /// Builds a highlighted value away from the caller's actor and cooperates
+    /// with Swift task cancellation. Conversation views use this path for code
+    /// blocks so switching sessions does not leave obsolete scans running.
+    public static func highlightAsync(
+        _ code: String,
+        language: String,
+        fontSize: CGFloat = 12
+    ) async -> AttributedString? {
+        guard !Task.isCancelled else { return nil }
+        let normalized = normalizeLanguage(language)
+        let highlightingTask = Task.detached(priority: .userInitiated) { () -> AttributedString? in
+            guard let tokens = cachedTokensCancellable(code, language: normalized) else {
+                return nil
+            }
+
+            var result = AttributedString()
+            for (index, token) in tokens.enumerated() {
+                if index.isMultiple(of: 256), Task.isCancelled { return nil }
+                var attributed = AttributedString(token.text)
+                attributed.foregroundColor = color(for: token.kind)
+                if token.kind == .keyword || token.kind == .builtinType {
+                    attributed.font = .system(size: fontSize, weight: .medium, design: .monospaced)
+                } else {
+                    attributed.font = .system(size: fontSize, weight: .regular, design: .monospaced)
+                }
+                result.append(attributed)
+            }
+            return Task.isCancelled ? nil : result
+        }
+
+        return await withTaskCancellationHandler {
+            await highlightingTask.value
+        } onCancel: {
+            highlightingTask.cancel()
+        }
     }
 
     // Normalize markdown language names → file extensions
@@ -77,13 +134,62 @@ public enum SyntaxHighlighter {
 
     // MARK: - Tokenizer
 
-    private static func tokenize(_ code: String, language: String) -> [Token] {
+    private static func cachedTokens(_ code: String, language: String) -> [Token] {
+        cachedTokens(code, language: language, cancellationCheck: { false }) ?? []
+    }
+
+    private static func cachedTokensCancellable(_ code: String, language: String) -> [Token]? {
+        cachedTokens(
+            code,
+            language: language,
+            cancellationCheck: { Task<Never, Never>.isCancelled }
+        )
+    }
+
+    private static func cachedTokens(
+        _ code: String,
+        language: String,
+        cancellationCheck: () -> Bool
+    ) -> [Token]? {
+        guard !cancellationCheck() else { return nil }
+        let key = "\(language)\u{001F}\(code)"
+        if let cached = tokenCache.value(for: key) { return cached }
+        guard let tokens = tokenize(
+            code,
+            language: language,
+            cancellationCheck: cancellationCheck
+        ) else {
+            return nil
+        }
+        guard !cancellationCheck() else { return nil }
+        tokenCache.insert(tokens, for: key, sourceByteCount: code.utf8.count)
+        return tokens
+    }
+
+    private static func tokenize(
+        _ code: String,
+        language: String,
+        cancellationCheck: () -> Bool
+    ) -> [Token]? {
         let lang = languageConfig(for: language)
         var tokens: [Token] = []
         let chars = Array(code)
+        var plainBuffer: [Character] = []
         var i = 0
 
+        func flushPlain() {
+            guard !plainBuffer.isEmpty else { return }
+            tokens.append(Token(text: String(plainBuffer), kind: .plain))
+            plainBuffer.removeAll(keepingCapacity: true)
+        }
+
+        func appendToken(from start: Int, to end: Int, kind: TokenKind) {
+            flushPlain()
+            tokens.append(Token(text: String(chars[start..<end]), kind: kind))
+        }
+
         while i < chars.count {
+            if i.isMultiple(of: 2_048), cancellationCheck() { return nil }
             // Multi-line comment
             if i + 1 < chars.count, chars[i] == "/" && chars[i + 1] == "*" {
                 let start = i
@@ -92,16 +198,16 @@ public enum SyntaxHighlighter {
                     i += 1
                 }
                 if i + 1 < chars.count { i += 2 } else { i = chars.count }
-                tokens.append(Token(text: String(chars[start..<i]), kind: .comment))
+                appendToken(from: start, to: i, kind: .comment)
                 continue
             }
 
             // Single-line comment
             if let commentPrefix = lang.lineComment,
-               code[code.index(code.startIndex, offsetBy: i)...].hasPrefix(commentPrefix) {
+               commentPrefix.matches(chars, at: i) {
                 let start = i
                 while i < chars.count, chars[i] != "\n" { i += 1 }
-                tokens.append(Token(text: String(chars[start..<i]), kind: .comment))
+                appendToken(from: start, to: i, kind: .comment)
                 continue
             }
 
@@ -109,7 +215,7 @@ public enum SyntaxHighlighter {
             if lang.hashComment, chars[i] == "#", (i == 0 || chars[i - 1] == "\n" || chars[i - 1] == " " || chars[i - 1] == "\t") {
                 let start = i
                 while i < chars.count, chars[i] != "\n" { i += 1 }
-                tokens.append(Token(text: String(chars[start..<i]), kind: .comment))
+                appendToken(from: start, to: i, kind: .comment)
                 continue
             }
 
@@ -120,22 +226,20 @@ public enum SyntaxHighlighter {
                     let start = i
                     i += 3
                     while i + 2 < chars.count, !(chars[i] == "\"" && chars[i + 1] == "\"" && chars[i + 2] == "\"") {
-                        if chars[i] == "\\" { i += 1 }
-                        i += 1
+                        i += chars[i] == "\\" && i + 1 < chars.count ? 2 : 1
                     }
                     if i + 2 < chars.count { i += 3 } else { i = chars.count }
-                    tokens.append(Token(text: String(chars[start..<i]), kind: .string))
+                    appendToken(from: start, to: i, kind: .string)
                     continue
                 }
 
                 let start = i
                 i += 1
                 while i < chars.count, chars[i] != "\"", chars[i] != "\n" {
-                    if chars[i] == "\\" { i += 1 }
-                    i += 1
+                    i += chars[i] == "\\" && i + 1 < chars.count ? 2 : 1
                 }
                 if i < chars.count, chars[i] == "\"" { i += 1 }
-                tokens.append(Token(text: String(chars[start..<i]), kind: .string))
+                appendToken(from: start, to: i, kind: .string)
                 continue
             }
 
@@ -144,11 +248,10 @@ public enum SyntaxHighlighter {
                 let start = i
                 i += 1
                 while i < chars.count, chars[i] != "'", chars[i] != "\n" {
-                    if chars[i] == "\\" { i += 1 }
-                    i += 1
+                    i += chars[i] == "\\" && i + 1 < chars.count ? 2 : 1
                 }
                 if i < chars.count, chars[i] == "'" { i += 1 }
-                tokens.append(Token(text: String(chars[start..<i]), kind: .string))
+                appendToken(from: start, to: i, kind: .string)
                 continue
             }
 
@@ -158,10 +261,10 @@ public enum SyntaxHighlighter {
                 i += 1
                 while i < chars.count, chars[i].isLetter || chars[i].isNumber || chars[i] == "_" { i += 1 }
                 if i > start + 1 {
-                    tokens.append(Token(text: String(chars[start..<i]), kind: .attribute))
+                    appendToken(from: start, to: i, kind: .attribute)
                     continue
                 }
-                tokens.append(Token(text: "@", kind: .plain))
+                plainBuffer.append("@")
                 continue
             }
 
@@ -174,7 +277,7 @@ public enum SyntaxHighlighter {
                 } else {
                     while i < chars.count, chars[i].isNumber || chars[i] == "." || chars[i] == "_" || chars[i] == "e" || chars[i] == "E" { i += 1 }
                 }
-                tokens.append(Token(text: String(chars[start..<i]), kind: .number))
+                appendToken(from: start, to: i, kind: .number)
                 continue
             }
 
@@ -184,48 +287,53 @@ public enum SyntaxHighlighter {
                 while i < chars.count, chars[i].isLetter || chars[i].isNumber || chars[i] == "_" { i += 1 }
                 let word = String(chars[start..<i])
                 if lang.keywords.contains(word) {
+                    flushPlain()
                     tokens.append(Token(text: word, kind: .keyword))
                 } else if lang.types.contains(word) {
+                    flushPlain()
                     tokens.append(Token(text: word, kind: .builtinType))
                 } else if word.first?.isUppercase == true {
+                    flushPlain()
                     tokens.append(Token(text: word, kind: .builtinType))
                 } else {
                     // Check if followed by ( -- likely a function
                     if i < chars.count, chars[i] == "(" {
+                        flushPlain()
                         tokens.append(Token(text: word, kind: .property))
                     } else {
-                        tokens.append(Token(text: word, kind: .plain))
+                        plainBuffer.append(contentsOf: word)
                     }
                 }
                 continue
             }
 
             // Everything else
-            tokens.append(Token(text: String(chars[i]), kind: .plain))
+            plainBuffer.append(chars[i])
             i += 1
         }
 
+        flushPlain()
         return tokens
     }
 
     private static func languageConfig(for ext: String) -> LanguageConfig {
         switch ext {
         case "swift":
-            return LanguageConfig(lineComment: "//", hashComment: false, keywords: swiftKeywords, types: swiftTypes)
+            return LanguageConfig(lineComment: .slashes, hashComment: false, keywords: swiftKeywords, types: swiftTypes)
         case "js", "jsx", "ts", "tsx":
-            return LanguageConfig(lineComment: "//", hashComment: false, keywords: jsKeywords, types: jsTypes)
+            return LanguageConfig(lineComment: .slashes, hashComment: false, keywords: jsKeywords, types: jsTypes)
         case "py":
             return LanguageConfig(lineComment: nil, hashComment: true, keywords: pythonKeywords, types: pythonTypes)
         case "go":
-            return LanguageConfig(lineComment: "//", hashComment: false, keywords: goKeywords, types: goTypes)
+            return LanguageConfig(lineComment: .slashes, hashComment: false, keywords: goKeywords, types: goTypes)
         case "rs":
-            return LanguageConfig(lineComment: "//", hashComment: false, keywords: rustKeywords, types: rustTypes)
+            return LanguageConfig(lineComment: .slashes, hashComment: false, keywords: rustKeywords, types: rustTypes)
         case "rb":
             return LanguageConfig(lineComment: nil, hashComment: true, keywords: rubyKeywords, types: [])
         case "sh", "bash", "zsh":
             return LanguageConfig(lineComment: nil, hashComment: true, keywords: shellKeywords, types: [])
         case "css", "scss":
-            return LanguageConfig(lineComment: "//", hashComment: false, keywords: cssKeywords, types: [])
+            return LanguageConfig(lineComment: .slashes, hashComment: false, keywords: cssKeywords, types: [])
         case "html", "xml":
             return LanguageConfig(lineComment: nil, hashComment: false, keywords: htmlKeywords, types: [])
         case "json":
@@ -233,9 +341,9 @@ public enum SyntaxHighlighter {
         case "yaml", "yml":
             return LanguageConfig(lineComment: nil, hashComment: true, keywords: ["true", "false", "null", "yes", "no"], types: [])
         case "sql":
-            return LanguageConfig(lineComment: "--", hashComment: false, keywords: sqlKeywords, types: sqlTypes)
+            return LanguageConfig(lineComment: .dashes, hashComment: false, keywords: sqlKeywords, types: sqlTypes)
         default:
-            return LanguageConfig(lineComment: "//", hashComment: true, keywords: [], types: [])
+            return LanguageConfig(lineComment: .slashes, hashComment: true, keywords: [], types: [])
         }
     }
 
@@ -373,18 +481,85 @@ public enum SyntaxHighlighter {
 
 // MARK: - Token Types
 
-private struct Token {
+private struct Token: Sendable {
     let text: String
     let kind: TokenKind
 }
 
-private enum TokenKind {
+private enum TokenKind: Sendable {
     case keyword, string, comment, number, builtinType, attribute, property, plain
 }
 
-private struct LanguageConfig {
-    let lineComment: String?
+private enum LineCommentPrefix: Sendable {
+    case slashes
+    case dashes
+
+    func matches(_ characters: [Character], at index: Int) -> Bool {
+        guard index >= 0, index + 1 < characters.count else { return false }
+        switch self {
+        case .slashes:
+            return characters[index] == "/" && characters[index + 1] == "/"
+        case .dashes:
+            return characters[index] == "-" && characters[index + 1] == "-"
+        }
+    }
+}
+
+private struct LanguageConfig: Sendable {
+    let lineComment: LineCommentPrefix?
     let hashComment: Bool
     let keywords: Set<String>
     let types: Set<String>
+}
+
+private final class TokenCache: @unchecked Sendable {
+    private final class Entry {
+        let tokens: [Token]
+        init(tokens: [Token]) { self.tokens = tokens }
+    }
+
+    private let cache = NSCache<NSString, Entry>()
+    private let statisticsLock = NSLock()
+    private var statisticsStorage = SyntaxHighlighter.CacheStatistics()
+
+    init(costLimit: Int) {
+        cache.countLimit = 256
+        cache.totalCostLimit = costLimit
+    }
+
+    var statistics: SyntaxHighlighter.CacheStatistics {
+        statisticsLock.lock()
+        defer { statisticsLock.unlock() }
+        return statisticsStorage
+    }
+
+    func value(for key: String) -> [Token]? {
+        guard let entry = cache.object(forKey: key as NSString) else {
+            record { $0.misses += 1 }
+            return nil
+        }
+        record { $0.hits += 1 }
+        return entry.tokens
+    }
+
+    func insert(_ tokens: [Token], for key: String, sourceByteCount: Int) {
+        // The key, source slices and token array all retain memory. This
+        // intentionally overestimates cost so NSCache evicts before the
+        // highlighter can dominate a long conversation's working set.
+        let cost = max(1, sourceByteCount * 4 + tokens.count * 64)
+        cache.setObject(Entry(tokens: tokens), forKey: key as NSString, cost: cost)
+    }
+
+    func reset() {
+        cache.removeAllObjects()
+        statisticsLock.lock()
+        statisticsStorage = SyntaxHighlighter.CacheStatistics()
+        statisticsLock.unlock()
+    }
+
+    private func record(_ update: (inout SyntaxHighlighter.CacheStatistics) -> Void) {
+        statisticsLock.lock()
+        update(&statisticsStorage)
+        statisticsLock.unlock()
+    }
 }

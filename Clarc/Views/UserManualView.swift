@@ -21,8 +21,8 @@ struct UserManualView: View {
                         .font(.system(size: ClaudeTheme.size(12), weight: .semibold))
                         .foregroundStyle(.secondary)
                         .frame(width: 24, height: 24)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .clipShape(Circle())
+                        .background(.thinMaterial, in: Circle())
+                        .overlay(Circle().strokeBorder(ClarcDesignTokens.edgeHighlight, lineWidth: 0.6))
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
@@ -30,6 +30,7 @@ struct UserManualView: View {
             }
         }
         .frame(width: 900, height: 680)
+        .clarcWindowCanvas()
     }
 
     // MARK: - Topic List
@@ -84,8 +85,7 @@ struct UserManualView: View {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clarcGlassSurface(.control, cornerRadius: 10)
             }
 
             if let note = section.note {
@@ -98,12 +98,8 @@ struct UserManualView: View {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.accentColor.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 0.5)
-                )
+                .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clarcGlassSurface(.selection, cornerRadius: 12)
             }
         }
     }
@@ -125,12 +121,11 @@ private struct ManualKeyValueRow: View {
                     .foregroundStyle(symbolColor ?? .primary)
                     .frame(width: 28, height: 20)
             } else {
-                Text(key)
+                Text(LocalizedStringKey(key))
                     .font(.system(size: ClaudeTheme.size(12), weight: .medium, design: .monospaced))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .clarcGlassSurface(.control, cornerRadius: 6)
                     .fixedSize()
             }
             Text(LocalizedStringKey(value))
@@ -196,7 +191,7 @@ enum ManualTopic: String, CaseIterable, Identifiable {
         case .marketplace:     "Skill Marketplace"
         case .permissions:     "Permission Requests"
         case .statusLine:      "Status Line"
-        case .settings:        "Settings & Themes"
+        case .settings:        "Settings & Appearance"
         }
     }
 
@@ -641,7 +636,7 @@ enum ManualTopic: String, CaseIterable, Identifiable {
                     title: "General Tab",
                     body: "The General tab configures session defaults. Changes apply to newly created sessions — existing sessions keep their current values.",
                     items: [
-                        KeyValueItem(key: "Theme", value: "Accent color palette (Terracotta, Ocean, Forest, Lavender, Midnight, Amber)"),
+                        KeyValueItem(key: "Appearance", value: "Follow the Mac appearance setting, or always use light or dark appearance"),
                         KeyValueItem(key: "Interface Font Size", value: "Adjust the font size for the app UI (sidebar, toolbars, labels)"),
                         KeyValueItem(key: "Messages Font Size", value: "Adjust the font size in the chat message area"),
                         KeyValueItem(key: "Default Model", value: "Claude model used when starting a new session"),
@@ -663,15 +658,12 @@ enum ManualTopic: String, CaseIterable, Identifiable {
                     ]
                 ),
                 ManualSection(
-                    title: "Themes",
-                    body: "Clarc ships with six accent color themes. Preview each one directly from the theme picker — the whole app recolors live as you choose.",
+                    title: "Color & Appearance",
+                    body: "Clarc uses one warm Claude-inspired palette. Choose whether Clarc follows macOS or stays in light or dark appearance.",
                     items: [
-                        KeyValueItem(key: "Terracotta", value: "Claude default — warm orange-red"),
-                        KeyValueItem(key: "Ocean", value: "Cool blue"),
-                        KeyValueItem(key: "Forest", value: "Deep green"),
-                        KeyValueItem(key: "Lavender", value: "Soft purple"),
-                        KeyValueItem(key: "Midnight", value: "Dark indigo"),
-                        KeyValueItem(key: "Amber", value: "Warm yellow"),
+                        KeyValueItem(key: "Follow System", value: "Use the Mac appearance setting."),
+                        KeyValueItem(key: "Light", value: "Always use light appearance."),
+                        KeyValueItem(key: "Dark", value: "Always use dark appearance."),
                     ]
                 ),
                 ManualSection(

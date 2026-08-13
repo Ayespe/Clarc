@@ -91,7 +91,7 @@ struct WebPreviewSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(ClaudeTheme.surfaceElevated)
+            .clarcGlassSurface(.inspector, cornerRadius: 0)
 
             ClaudeThemeDivider()
 

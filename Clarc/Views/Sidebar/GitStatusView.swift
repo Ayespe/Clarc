@@ -111,7 +111,7 @@ struct GitStatusView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(ClaudeTheme.surfaceSecondary.opacity(0.5))
+        .clarcGlassSurface(.inspector, cornerRadius: 0)
         .onAppear {
             refresh()
             startWatchingHEAD()
@@ -196,7 +196,7 @@ struct GitStatusView: View {
             .foregroundStyle(ClaudeTheme.textPrimary)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(ClaudeTheme.surfacePrimary.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+            .clarcGlassSurface(.control, cornerRadius: 7)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -304,7 +304,7 @@ struct GitStatusView: View {
             }
         }
         .frame(width: 420, height: 360)
-        .background(ClaudeTheme.background)
+        .clarcGlassSurface(.popover, cornerRadius: 18)
     }
 
     private func allChangesList(_ entries: [GitPorcelainEntry]) -> some View {

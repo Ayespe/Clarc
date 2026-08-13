@@ -7,105 +7,138 @@ struct MessageListView: View {
     @Environment(ChatBridge.self) private var chatBridge
     @Environment(WindowState.self) private var windowState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var scrollPosition = ScrollPosition()
-    @State private var settledItems: [ChatMessage] = []
-    @State private var scrollTask: Task<Void, Never>?
-    @State private var highlightTask: Task<Void, Never>?
-    @State private var isNearBottom = true
+    @State private var snapshot = ConversationSnapshot.empty
+    @State private var scrollCoordinator = ConversationScrollCoordinator()
     @State private var isSessionReady = false
-    @State private var highlightedMessageId: UUID?
+
+    private static let bottomAnchorID = "conversation-bottom-anchor"
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    messageRows(settledItems[...])
+                    ForEach(snapshot.rows) { row in
+                        CenteredChatTrack {
+                            messageRow(row)
+                        }
+                        .id(row.id)
+                    }
                 }
-                .padding(.horizontal, 44)
                 .padding(.top, 16)
+                .scrollTargetLayout()
+                .onScrollTargetVisibilityChange(idType: UUID.self, threshold: 0.12) { visibleRowIDs in
+                    scrollCoordinator.updateVisibleRows(visibleRowIDs, in: snapshot)
+                }
 
                 // Streaming view is outside VStack — text deltas don't affect settled layout
-                VStack(spacing: 16) {
-                    if !windowState.focusMode {
-                        StreamingMessageView {
-                            rebuildSettledItems()
-                            if isNearBottom { scrollToBottomDebounced() }
+                CenteredChatTrack {
+                    VStack(spacing: 16) {
+                        if !windowState.focusMode {
+                            StreamingMessageView {
+                                // The active assistant tail is deliberately outside the
+                                // settled snapshot, so a new streaming block only changes
+                                // its isolated view and never rescans conversation history.
+                                scrollToBottomDebounced(using: proxy)
+                            }
+                        }
+
+                        if chatBridge.isStreaming {
+                            HStack(alignment: .top, spacing: 0) {
+                                StreamingIndicatorView(
+                                    isThinking: chatBridge.isThinking,
+                                    startDate: chatBridge.streamingStartDate
+                                )
+                                Spacer(minLength: 40)
+                            }
+                        }
+
+                        if !chatBridge.isStreaming && !snapshot.messages.isEmpty {
+                            WebPreviewButton(messages: snapshot.messages)
+                                .id("web-preview")
                         }
                     }
-
-                    if chatBridge.isStreaming {
-                        HStack(alignment: .top, spacing: 0) {
-                            StreamingIndicatorView(
-                                isThinking: chatBridge.isThinking,
-                                startDate: chatBridge.streamingStartDate
-                            )
-                            Spacer(minLength: 40)
-                        }
-                    }
-
-                    if !chatBridge.isStreaming && !settledItems.isEmpty {
-                        WebPreviewButton(messages: settledItems)
-                            .id("web-preview")
-                    }
+                    // Suppress layout animations when switching sessions so the pulse indicator
+                    // doesn't visually jump as StreamingMessageView changes height.
+                    .animation(.none, value: windowState.currentSessionId)
                 }
-                .padding(.horizontal, 44)
-                // Suppress layout animations when switching sessions so the pulse indicator
-                // doesn't visually jump as StreamingMessageView changes height.
-                .animation(.none, value: windowState.currentSessionId)
 
                 Color.clear.frame(height: 1)
                     .padding(.bottom, 16)
+                    .id(Self.bottomAnchorID)
             }
             .opacity(isSessionReady ? 1 : 0)
-            .scrollPosition($scrollPosition)
             .defaultScrollAnchor(.bottom)
             .onScrollGeometryChange(for: Bool.self) { geo in
                 let distanceFromBottom = geo.contentSize.height - geo.visibleRect.maxY
                 return distanceFromBottom < 120
             } action: { _, nearBottom in
-                isNearBottom = nearBottom
+                scrollCoordinator.updateNearBottom(nearBottom)
+            }
+            .onScrollPhaseChange { _, newPhase in
+                scrollCoordinator.updateScrollPhase(newPhase)
             }
             .task(id: windowState.currentSessionId) {
                 isSessionReady = false
-                scrollTask?.cancel()
-                highlightTask?.cancel()
-                highlightedMessageId = nil
-                scrollPosition = ScrollPosition()
-                rebuildSettledItems()
+                scrollCoordinator.reset()
+                rebuildSnapshot()
                 // Skip scroll/fade delay for empty sessions — appear instantly
-                guard !settledItems.isEmpty else {
+                guard !snapshot.messages.isEmpty else {
                     isSessionReady = true
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(16))  // 1 frame: scroll after VStack layout is committed
-                scrollPosition.scrollTo(edge: .bottom)
+                guard !Task.isCancelled else { return }
+                proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
                 // Pre-set isNearBottom so streaming messages that arrive before onScrollGeometryChange
                 // fires still trigger scrollToBottomDebounced(), keeping the pulse pinned to the bottom.
-                isNearBottom = true
+                scrollCoordinator.updateNearBottom(true)
                 try? await Task.sleep(for: .milliseconds(32))  // 2 frames: fade-in after scroll settles
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeIn(duration: 0.15)) { isSessionReady = true }
             }
             .onChange(of: chatBridge.isStreaming) { old, new in
-                // Only update when streaming ends — settled list doesn't change at start, so skip
-                if old && !new {
-                    rebuildSettledItems()
-                    scrollToBottomDebounced()
+                if !old && new {
+                    scrollCoordinator.streamingDidStart()
                 }
-            }
-            .overlay(alignment: .leading) {
-                if !userMessageOutlineItems.isEmpty {
-                    ConversationOutlineRail(
-                        items: userMessageOutlineItems,
-                        selectedMessageId: highlightedMessageId,
-                        onSelect: { messageId in
-                            jumpToMessage(messageId, using: proxy)
-                        }
-                    )
-                    .padding(.leading, 6)
+                // Only rebuild when streaming ends — settled list doesn't change at start.
+                if old && !new {
+                    rebuildSnapshot()
+                    scrollToBottomDebounced(using: proxy)
                 }
             }
             .overlay {
-                if settledItems.isEmpty && !chatBridge.isStreaming && windowState.currentSessionId == nil {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(scrollCoordinator.navigationVeilOpacity)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .overlay {
+                if !snapshot.outlineItems.isEmpty {
+                    GeometryReader { geometry in
+                        let resolvedTrackWidth = ChatLayout.resolvedWidth(
+                            availableWidth: geometry.size.width,
+                            trackWidth: ChatLayout.readingMaxWidth
+                        )
+                        let contentLeading = (geometry.size.width - resolvedTrackWidth) / 2
+                        let railLeading = max(8, contentLeading - 36)
+
+                        ConversationOutlineRail(
+                            items: snapshot.outlineItems,
+                            activeMessageID: scrollCoordinator.activeOutlineMessageID,
+                            targetMessageID: scrollCoordinator.targetOutlineMessageID,
+                            availableHeight: max(220, geometry.size.height - 48),
+                            onSelect: { messageID in
+                                jumpToMessage(messageID, using: proxy)
+                            }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .offset(x: railLeading)
+                    }
+                }
+            }
+            .overlay {
+                if snapshot.messages.isEmpty && !chatBridge.isStreaming && windowState.currentSessionId == nil {
                     EmptySessionView()
                         .allowsHitTesting(false)
                 }
@@ -116,23 +149,21 @@ struct MessageListView: View {
     // MARK: - Helpers
 
     @ViewBuilder
-    private func messageRows(_ messages: some RandomAccessCollection<ChatMessage>) -> some View {
-        let groups = groupMessages(Array(messages))
-        ForEach(groups) { group in
-            if group.isTransientGroup {
-                TransientGroupSummaryView(messages: group.messages)
-                    .id(group.id)
-            } else if let message = group.messages.first {
+    private func messageRow(_ row: ConversationRow) -> some View {
+        Group {
+            switch row {
+            case .message(let message):
                 MessageBubble(message: message)
-                    .id(message.id)
-                    .background {
-                        if highlightedMessageId == message.id {
-                            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
-                                .fill(ClaudeTheme.accent.opacity(0.08))
-                                .padding(.horizontal, -8)
-                                .padding(.vertical, -6)
-                        }
-                    }
+            case .transientGroup(_, let messages):
+                TransientGroupSummaryView(messages: messages)
+            }
+        }
+        .background {
+            if scrollCoordinator.highlightedMessageID == row.id {
+                RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
+                    .fill(ClaudeTheme.accent.opacity(0.08))
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -6)
             }
         }
     }
@@ -141,11 +172,14 @@ struct MessageListView: View {
 
     // MARK: - Settled Items
 
-    private func rebuildSettledItems() {
+    private func rebuildSnapshot() {
         let messages = settledOnlyMessages(from: chatBridge.messages)
+        let identity = ConversationSnapshotIdentity(messages: messages)
+        guard identity != snapshot.identity else { return }
+        let updatedSnapshot = ConversationSnapshot(messages: messages)
         var t = Transaction()
         t.animation = nil
-        withTransaction(t) { settledItems = messages }
+        withTransaction(t) { snapshot = updatedSnapshot }
     }
 
     /// If streaming, returns only completed messages excluding the last consecutive (non-error) assistant sequence.
@@ -165,72 +199,28 @@ struct MessageListView: View {
         return settled
     }
 
-    private func scrollToBottomDebounced() {
-        scrollTask?.cancel()
-        scrollTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(50))
-            guard !Task.isCancelled else { return }
-            scrollPosition.scrollTo(edge: .bottom)
-        }
-    }
-
-    private var userMessageOutlineItems: [ConversationOutlineItem] {
-        settledItems.compactMap { message in
-            guard message.role == .user else { return nil }
-            return ConversationOutlineItem(message: message)
+    private func scrollToBottomDebounced(using proxy: ScrollViewProxy) {
+        scrollCoordinator.requestBottomScroll {
+            proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
         }
     }
 
     private func jumpToMessage(_ messageId: UUID, using proxy: ScrollViewProxy) {
-        highlightTask?.cancel()
-        highlightedMessageId = messageId
-        isNearBottom = false
-
-        if reduceMotion {
-            proxy.scrollTo(messageId, anchor: .top)
-        } else {
-            withAnimation(.easeInOut(duration: 0.45)) {
-                proxy.scrollTo(messageId, anchor: .top)
-            }
+        scrollCoordinator.jump(
+            to: messageId,
+            in: snapshot,
+            reduceMotion: reduceMotion
+        ) { targetID in
+            proxy.scrollTo(targetID, anchor: .top)
         }
-
-        highlightTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 450 : 1_100))
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
-                highlightedMessageId = nil
-            }
-        }
-    }
-}
-
-// MARK: - Conversation Outline
-
-struct ConversationOutlineItem: Identifiable, Equatable {
-    let id: UUID
-    let preview: String
-    let timestamp: Date
-
-    init(message: ChatMessage) {
-        id = message.id
-        timestamp = message.timestamp
-        preview = Self.previewText(for: message)
-    }
-
-    static func previewText(for message: ChatMessage) -> String {
-        let normalized = message.content
-            .split(whereSeparator: { $0.isWhitespace })
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !normalized.isEmpty { return normalized }
-        if let attachment = message.attachmentPaths.first { return attachment.name }
-        return String(localized: "Attachment", bundle: .module)
     }
 }
 
 private struct ConversationOutlineRail: View {
     let items: [ConversationOutlineItem]
-    let selectedMessageId: UUID?
+    let activeMessageID: UUID?
+    let targetMessageID: UUID?
+    let availableHeight: CGFloat
     let onSelect: (UUID) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -239,16 +229,22 @@ private struct ConversationOutlineRail: View {
     var body: some View {
         HStack(spacing: 0) {
             rail
+                .onHover { hovering in
+                    guard hovering else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                        isHovered = true
+                    }
+                }
             if isHovered {
                 outlinePanel
                     .transition(.opacity.combined(with: .move(edge: .leading)))
             }
         }
-        .frame(maxHeight: 440)
-        .contentShape(Rectangle())
+        .frame(maxHeight: availableHeight, alignment: .center)
         .onHover { hovering in
+            guard !hovering else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                isHovered = hovering
+                isHovered = false
             }
         }
         .zIndex(20)
@@ -257,18 +253,39 @@ private struct ConversationOutlineRail: View {
     }
 
     private var rail: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    Capsule()
-                        .fill(item.id == selectedMessageId ? ClaudeTheme.accent : ClaudeTheme.textTertiary.opacity(0.55))
-                        .frame(width: railWidth(at: index), height: 2)
+        Canvas { context, size in
+            guard !items.isEmpty else { return }
+
+            let step = size.height / CGFloat(items.count)
+            let tickHeight = min(2, max(0.75, step * 0.42))
+
+            for (index, item) in items.enumerated() {
+                let isTarget = item.id == targetMessageID
+                let isActive = item.id == activeMessageID
+                let color: Color
+                if isTarget {
+                    color = ClaudeTheme.accent
+                } else if isActive {
+                    color = ClaudeTheme.accent.opacity(0.78)
+                } else {
+                    color = ClaudeTheme.textTertiary.opacity(0.48)
                 }
+
+                let y = min(size.height - tickHeight, CGFloat(index) * step + (step - tickHeight) / 2)
+                let rect = CGRect(
+                    x: 0,
+                    y: max(0, y),
+                    width: railWidth(at: index),
+                    height: tickHeight
+                )
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: tickHeight / 2),
+                    with: .color(color)
+                )
             }
-            .padding(.vertical, 10)
         }
         .frame(width: 28, alignment: .leading)
-        .frame(maxHeight: 360, alignment: .leading)
+        .frame(height: railHeight)
         .contentShape(Rectangle())
     }
 
@@ -287,39 +304,56 @@ private struct ConversationOutlineRail: View {
                         Button {
                             onSelect(item.id)
                         } label: {
-                            Text(item.preview)
-                                .font(.system(size: ClaudeTheme.size(13), weight: .medium))
-                                .foregroundStyle(item.id == selectedMessageId ? ClaudeTheme.textPrimary : ClaudeTheme.textSecondary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .background {
-                                    if item.id == selectedMessageId {
-                                        RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                                            .fill(ClaudeTheme.accent.opacity(0.10))
-                                    }
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text(item.formattedSequence)
+                                    .font(.system(size: ClaudeTheme.size(11), weight: .medium, design: .monospaced))
+                                    .monospacedDigit()
+                                    .foregroundStyle(sequenceColor(for: item))
+                                    .frame(minWidth: 22, alignment: .trailing)
+
+                                Text(item.preview)
+                                    .font(.system(size: ClaudeTheme.size(13), weight: .medium))
+                                    .foregroundStyle(labelColor(for: item))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background {
+                                if item.id == targetMessageID || item.id == activeMessageID {
+                                    RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
+                                        .fill(ClaudeTheme.accent.opacity(item.id == targetMessageID ? 0.13 : 0.08))
                                 }
+                            }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("\(item.sequence). \(item.preview)")
                     }
                 }
                 .padding(.horizontal, 4)
                 .padding(.bottom, 6)
             }
         }
-        .frame(width: 350)
-        .frame(maxHeight: 430)
-        .background(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
-                .fill(ClaudeTheme.surfaceElevated)
-                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
-                .strokeBorder(ClaudeTheme.borderSubtle, lineWidth: 1)
-        )
+        .frame(width: 340)
+        .frame(maxHeight: availableHeight)
+        .clarcGlassSurface(.popover, cornerRadius: ClaudeTheme.cornerRadiusMedium)
+    }
+
+    private var railHeight: CGFloat {
+        min(360, max(24, CGFloat(items.count) * 7))
+    }
+
+    private func labelColor(for item: ConversationOutlineItem) -> Color {
+        item.id == targetMessageID || item.id == activeMessageID
+            ? ClaudeTheme.textPrimary
+            : ClaudeTheme.textSecondary
+    }
+
+    private func sequenceColor(for item: ConversationOutlineItem) -> Color {
+        item.id == targetMessageID || item.id == activeMessageID
+            ? ClaudeTheme.accent
+            : ClaudeTheme.textTertiary
     }
 
     private func railWidth(at index: Int) -> CGFloat {
@@ -340,74 +374,6 @@ fileprivate func partitionByStreaming(_ messages: [ChatMessage]) -> (settled: [C
     var streaming: [ChatMessage] = []
     for m in messages { if m.isStreaming { streaming.append(m) } else { settled.append(m) } }
     return (settled, streaming)
-}
-
-
-fileprivate struct MessageGroup: Identifiable {
-    let id: UUID
-    let messages: [ChatMessage]
-    let isTransientGroup: Bool
-}
-
-/// Returns true if the message would render only a transient tool summary (no visible text or non-transient tools).
-fileprivate func isPureTransientMessage(_ message: ChatMessage) -> Bool {
-    guard message.role == .assistant, !message.isError, !message.isCompactBoundary else { return false }
-    // Whitespace-only text is treated as invisible so it doesn't break transient grouping.
-    let hasVisibleText = message.blocks.contains {
-        guard let text = $0.text else { return false }
-        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-    if hasVisibleText { return false }
-    let toolCalls = message.blocks.compactMap(\.toolCall)
-    guard !toolCalls.isEmpty else { return false }
-    let hasNonTransient = toolCalls.contains { !ToolCategory(toolName: $0.name).isTransient }
-    if hasNonTransient { return false }
-    return true
-}
-
-/// Returns true if the message has no renderable content — all tool calls were removed
-/// (e.g. empty bash output stripped by setToolResult) and there is no text.
-/// These messages are invisible in the UI and should not break transient-tool grouping.
-fileprivate func isInvisibleMessage(_ message: ChatMessage) -> Bool {
-    guard message.role == .assistant, !message.isError, !message.isCompactBoundary, !message.isStreaming else { return false }
-    return message.blocks.isEmpty
-}
-
-/// Groups consecutive pure-transient assistant messages into combined groups.
-/// - Parameter minGroupSize: Minimum number of transient messages required to collapse into a group.
-///   Pass 1 (streaming context) to hide even a single completed tool call the moment the next message starts.
-///   Pass 2 (settled list) to keep lone tool calls visible after streaming ends.
-fileprivate func groupMessages(_ messages: [ChatMessage], minGroupSize: Int = 2) -> [MessageGroup] {
-    var result: [MessageGroup] = []
-    var accumulator: [ChatMessage] = []
-
-    func flushAccumulator() {
-        guard !accumulator.isEmpty else { return }
-        if accumulator.count >= minGroupSize {
-            result.append(MessageGroup(id: accumulator[0].id, messages: accumulator, isTransientGroup: true))
-        } else {
-            for m in accumulator {
-                result.append(MessageGroup(id: m.id, messages: [m], isTransientGroup: false))
-            }
-        }
-        accumulator = []
-    }
-
-    for message in messages {
-        if isPureTransientMessage(message) {
-            accumulator.append(message)
-        } else if isInvisibleMessage(message) {
-            // Skip invisible messages (e.g. all tool calls removed due to empty results).
-            // They render nothing in the UI and must not break consecutive transient grouping.
-            continue
-        } else {
-            flushAccumulator()
-            result.append(MessageGroup(id: message.id, messages: [message], isTransientGroup: false))
-        }
-    }
-    flushAccumulator()
-
-    return result
 }
 
 // MARK: - Shared Helper
@@ -481,6 +447,7 @@ struct StreamingMessageView: View {
 struct TransientGroupSummaryView: View {
     let messages: [ChatMessage]
     @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var allToolCalls: [ToolCall] {
         messages.flatMap { $0.blocks.compactMap(\.toolCall) }
@@ -490,7 +457,7 @@ struct TransientGroupSummaryView: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                         isExpanded.toggle()
                     }
                 } label: {

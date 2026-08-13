@@ -25,7 +25,7 @@ public struct ChatView<InputAccessory: View>: View {
 
             StatusLineView()
         }
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
         .onKeyPress(.escape, phases: .down) { _ in
             if !windowState.messageQueue.isEmpty {
                 windowState.messageQueue.removeLast()
@@ -72,7 +72,7 @@ public struct ChatView<InputAccessory: View>: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
         }
-        .background(ClaudeTheme.background)
+        .background(Color.clear)
     }
 
     private func executeShortcut(_ shortcut: ChatShortcut) {

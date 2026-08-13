@@ -43,14 +43,6 @@ struct ClarcApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
-            CommandMenu("Theme") {
-                ForEach(AppTheme.allCases) { theme in
-                    Button(theme.displayName) {
-                        appState.selectedTheme = theme
-                    }
-                    .disabled(appState.selectedTheme == theme)
-                }
-            }
         }
 
         // Dedicated project window — opened on double-click
@@ -77,6 +69,7 @@ struct MainWindowRoot: View {
 
     var body: some View {
         MainView()
+            .preferredColorScheme(appState.appearanceMode.preferredColorScheme)
             .environment(appState)
             .environment(windowState)
             .environment(chatBridge)
@@ -111,6 +104,7 @@ struct SettingsWindowRoot: View {
 
     var body: some View {
         SettingsView()
+            .preferredColorScheme(appState.appearanceMode.preferredColorScheme)
             .environment(appState)
             .environment(windowState)
     }
@@ -126,6 +120,7 @@ struct ProjectWindowRoot: View {
 
     var body: some View {
         ProjectWindowView()
+            .preferredColorScheme(appState.appearanceMode.preferredColorScheme)
             .environment(appState)
             .environment(windowState)
             .environment(chatBridge)

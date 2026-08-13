@@ -97,11 +97,7 @@ struct QuickSwitcherView: View {
                 }
             }
             .frame(width: 580)
-            .background(ClaudeTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(ClaudeTheme.border, lineWidth: 1)
-            )
+            .clarcGlassSurface(.popover, cornerRadius: 18)
             .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
             .padding(.top, 74)
         }

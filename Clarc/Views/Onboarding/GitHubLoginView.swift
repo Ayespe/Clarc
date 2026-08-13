@@ -40,7 +40,7 @@ struct GitHubLoginView: View {
         }
         .padding(24)
         .frame(width: 480, height: 400)
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
     }
 
     // MARK: - Start View

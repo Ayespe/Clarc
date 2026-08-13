@@ -578,3 +578,16 @@
 "Show an alert when input is required to continue." = "Muestra un aviso cuando se necesite información para continuar.";
 "The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "El icono del Dock rebota una vez al llegar un aviso habilitado mientras Clarc está inactivo.";
 "Input required to continue" = "Se necesita información para continuar";
+
+// Apariencia
+"Appearance" = "Apariencia";
+"Follow System" = "Seguir el sistema";
+"Light" = "Claro";
+"Dark" = "Oscuro";
+"Use the Mac appearance setting." = "Usa el ajuste de apariencia del Mac.";
+"Always use light appearance." = "Usa siempre la apariencia clara.";
+"Always use dark appearance." = "Usa siempre la apariencia oscura.";
+"Settings & Appearance" = "Ajustes y apariencia";
+"Color & Appearance" = "Color y apariencia";
+"Follow the Mac appearance setting, or always use light or dark appearance" = "Sigue el ajuste de apariencia del Mac o usa siempre la apariencia clara u oscura";
+"Clarc uses one warm Claude-inspired palette. Choose whether Clarc follows macOS or stays in light or dark appearance." = "Clarc usa una única paleta cálida inspirada en Claude. Elige si sigue macOS o permanece en apariencia clara u oscura.";

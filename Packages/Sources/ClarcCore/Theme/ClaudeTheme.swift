@@ -189,21 +189,31 @@ public struct ClaudeSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Claude Send Button
+// MARK: - Claude Send / Stop Button
+
+public enum ClaudeSendButtonRole: Sendable, Equatable {
+    case send
+    case stop
+}
 
 public struct ClaudeSendButton: View {
     public let isEnabled: Bool
-    public let systemImageName: String
+    public let role: ClaudeSendButtonRole
+    public let systemImageName: String?
     public let accessibilityLabel: String
     public let action: () -> Void
 
+    @State private var isHovering = false
+
     public init(
         isEnabled: Bool,
-        systemImageName: String = "arrow.up",
+        role: ClaudeSendButtonRole = .send,
+        systemImageName: String? = nil,
         accessibilityLabel: String = "Send message",
         action: @escaping () -> Void
     ) {
         self.isEnabled = isEnabled
+        self.role = role
         self.systemImageName = systemImageName
         self.accessibilityLabel = accessibilityLabel
         self.action = action
@@ -211,16 +221,109 @@ public struct ClaudeSendButton: View {
 
     public var body: some View {
         Button(action: action) {
-            Image(systemName: systemImageName)
-                .font(.system(size: ClaudeTheme.size(14), weight: .semibold))
+            Image(systemName: systemImageName ?? defaultSystemImageName)
+                .font(.system(size: ClaudeTheme.size(iconSize), weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .background(isEnabled ? ClaudeTheme.accent : ClaudeTheme.textTertiary)
-                .clipShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ClaudeSendControlStyle(role: role, isEnabled: isEnabled, isHovering: isHovering))
         .disabled(!isEnabled)
+        .onHover { isHovering = $0 }
         .accessibilityLabel(Text(accessibilityLabel))
+    }
+
+    private var defaultSystemImageName: String {
+        switch role {
+        case .send: "arrow.up"
+        case .stop: "stop.fill"
+        }
+    }
+
+    private var iconSize: CGFloat {
+        switch role {
+        case .send: 14
+        case .stop: 10
+        }
+    }
+}
+
+private struct ClaudeSendControlStyle: ButtonStyle {
+    let role: ClaudeSendButtonRole
+    let isEnabled: Bool
+    let isHovering: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                ClaudeSendControlBackground(
+                    role: role,
+                    fillColor: backgroundStyle,
+                    isHovering: isHovering,
+                    reduceTransparency: reduceTransparency
+                )
+            )
+            .overlay(Circle().strokeBorder(borderColor, lineWidth: role == .stop ? 0.8 : 0))
+            .shadow(
+                color: shadowColor,
+                radius: configuration.isPressed ? 2 : (isHovering ? 7 : 4),
+                y: configuration.isPressed ? 1 : 2
+            )
+            .scaleEffect(configuration.isPressed ? 0.94 : (isHovering ? 1.025 : 1))
+            .opacity(isEnabled ? 1 : 0.56)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: ClarcDesignTokens.hoverDuration),
+                value: configuration.isPressed
+            )
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: ClarcDesignTokens.hoverDuration),
+                value: isHovering
+            )
+    }
+
+    private var backgroundStyle: Color {
+        guard isEnabled else { return ClaudeTheme.surfaceTertiary }
+        switch role {
+        case .send: return ClaudeTheme.accent
+        case .stop: return ClarcDesignTokens.glassTintStrong
+        }
+    }
+
+    private var borderColor: Color {
+        guard isEnabled else { return ClaudeTheme.borderSubtle }
+        switch role {
+        case .send: return Color.clear
+        case .stop: return ClaudeTheme.statusError.opacity(0.58)
+        }
+    }
+
+    private var shadowColor: Color {
+        guard isEnabled else { return .clear }
+        switch role {
+        case .send: return ClaudeTheme.accent.opacity(isHovering ? 0.24 : 0.12)
+        case .stop: return ClaudeTheme.statusError.opacity(isHovering ? 0.20 : 0.10)
+        }
+    }
+}
+
+private struct ClaudeSendControlBackground: View {
+    let role: ClaudeSendButtonRole
+    let fillColor: Color
+    let isHovering: Bool
+    let reduceTransparency: Bool
+
+    var body: some View {
+        ZStack {
+            Circle().fill(fillColor)
+            if role == .stop {
+                if !reduceTransparency {
+                    Circle().fill(.thinMaterial).opacity(0.42)
+                }
+                Circle().fill(ClaudeTheme.statusError.opacity(isHovering ? 0.34 : 0.24))
+            }
+        }
     }
 }
 

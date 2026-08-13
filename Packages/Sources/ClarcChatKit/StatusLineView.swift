@@ -65,7 +65,7 @@ struct StatusLineView: View {
         .padding(.trailing, 20)
         .frame(height: 28)
         .padding(.bottom, 4)
-        .background(ClaudeTheme.surfacePrimary)
+        .clarcGlassSurface(.inspector, cornerRadius: 0)
         .overlay(alignment: .top) {
             ClaudeTheme.borderSubtle.frame(height: 0.5)
         }

@@ -161,7 +161,7 @@ struct AttachmentPreviewItem: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(ClaudeTheme.surfaceSecondary)
         }
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
     }
 
     private var shortTextName: String {

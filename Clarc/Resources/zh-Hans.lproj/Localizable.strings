@@ -578,3 +578,16 @@
 "Show an alert when input is required to continue." = "需要输入才能继续时显示提醒。";
 "The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "Clarc 不活跃时收到已启用的提醒，Dock 图标会跳动一次。";
 "Input required to continue" = "需要输入才能继续";
+
+// 外观
+"Appearance" = "外观";
+"Follow System" = "跟随系统";
+"Light" = "浅色";
+"Dark" = "深色";
+"Use the Mac appearance setting." = "使用 Mac 的外观设置。";
+"Always use light appearance." = "始终使用浅色外观。";
+"Always use dark appearance." = "始终使用深色外观。";
+"Settings & Appearance" = "设置与外观";
+"Color & Appearance" = "颜色与外观";
+"Follow the Mac appearance setting, or always use light or dark appearance" = "跟随 Mac 外观设置，或始终使用浅色或深色外观";
+"Clarc uses one warm Claude-inspired palette. Choose whether Clarc follows macOS or stays in light or dark appearance." = "Clarc 使用统一的 Claude 暖色调色板。你可以选择跟随 macOS，或固定使用浅色、深色外观。";

@@ -31,7 +31,26 @@ struct BubbleStyle: ViewModifier {
             // own containers where a boundary actually carries meaning.
             content
                 .padding(.vertical, 2)
-        default:
+        case .user:
+            content
+                .padding(padding)
+                .clarcGlassSurface(.message, cornerRadius: ClaudeTheme.cornerRadiusLarge)
+                .background(ClaudeTheme.userBubble.opacity(0.82), in: shape)
+                .overlay {
+                    shape.strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.13), .white.opacity(0.025)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+                }
+        case .tool:
+            content
+                .padding(padding)
+                .clarcGlassSurface(.message, cornerRadius: ClaudeTheme.cornerRadiusSmall)
+        case .error, .toolError:
             content
                 .padding(padding)
                 .background(background, in: shape)

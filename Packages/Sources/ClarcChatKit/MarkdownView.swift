@@ -1,41 +1,180 @@
+import Foundation
 import SwiftUI
 import ClarcCore
 
-// MARK: - Parsed document cache
+// MARK: - Markdown render repository
 
-/// Caches only semantic markdown blocks. Typography and theme colors are
-/// applied while rendering, so changing message font size cannot revive stale
-/// attributed strings from the cache.
-private final class MarkdownDocumentCache: @unchecked Sendable {
-    static let shared = MarkdownDocumentCache()
-    private let cache = NSCache<NSString, CacheEntry>()
+/// Process-wide, cost-bounded cache for the expensive, appearance-independent
+/// stages of Markdown rendering.
+///
+/// The repository deliberately does not cache final fonts or colors. Semantic
+/// blocks and inline presentation intents survive an appearance change, while
+/// typography and theme attributes are reapplied by the views on every render.
+/// Together with SyntaxHighlighter's 16 MiB token cache, these limits keep the
+/// complete Markdown render pipeline near a 48 MiB upper bound.
+nonisolated final class MarkdownRenderRepository: @unchecked Sendable {
+    static let shared = MarkdownRenderRepository()
 
-    private final class CacheEntry {
+    static let semanticCostLimitBytes = 20 * 1024 * 1024
+    static let inlineCostLimitBytes = 12 * 1024 * 1024
+
+    struct Statistics: Sendable, Equatable {
+        var semanticHits = 0
+        var semanticMisses = 0
+        var inlineHits = 0
+        var inlineMisses = 0
+    }
+
+    private let semanticCache = NSCache<NSString, SemanticEntry>()
+    private let inlineCache = NSCache<NSString, InlineEntry>()
+    private let statisticsLock = NSLock()
+    private var statisticsStorage = Statistics()
+
+    private final class SemanticEntry {
         let blocks: [MarkdownRenderBlock]
         init(_ blocks: [MarkdownRenderBlock]) { self.blocks = blocks }
     }
 
+    private final class InlineEntry {
+        let value: AttributedString?
+        init(_ value: AttributedString?) { self.value = value }
+    }
+
     private init() {
-        cache.countLimit = 200
+        semanticCache.countLimit = 400
+        semanticCache.totalCostLimit = Self.semanticCostLimitBytes
+        inlineCache.countLimit = 2_000
+        inlineCache.totalCostLimit = Self.inlineCostLimitBytes
     }
 
-    func get(_ key: String) -> [MarkdownRenderBlock]? {
-        cache.object(forKey: key as NSString)?.blocks
+    var statistics: Statistics {
+        statisticsLock.lock()
+        defer { statisticsLock.unlock() }
+        return statisticsStorage
     }
 
-    func set(_ key: String, _ blocks: [MarkdownRenderBlock]) {
-        cache.setObject(CacheEntry(blocks), forKey: key as NSString)
+    func cachedBlocks(for text: String) -> [MarkdownRenderBlock]? {
+        guard let entry = semanticCache.object(forKey: text as NSString) else {
+            record { $0.semanticMisses += 1 }
+            return nil
+        }
+        record { $0.semanticHits += 1 }
+        return entry.blocks
+    }
+
+    func blocks(for text: String) -> [MarkdownRenderBlock] {
+        if let cached = cachedBlocks(for: text) { return cached }
+        let blocks = MarkdownDocumentParser.parse(text)
+        store(blocks: blocks, for: text)
+        prewarmInlineDocuments(in: blocks)
+        return blocks
+    }
+
+    func blocksAsync(for text: String) async -> [MarkdownRenderBlock] {
+        if let cached = cachedBlocks(for: text) { return cached }
+
+        let parsingTask = Task.detached(priority: .userInitiated) { () -> [MarkdownRenderBlock]? in
+            guard let parsed = MarkdownDocumentParser.parseCancellable(text),
+                  !Task.isCancelled else {
+                return nil
+            }
+            MarkdownRenderRepository.shared.prewarmInlineDocuments(in: parsed)
+            return Task.isCancelled ? nil : parsed
+        }
+        let parsed = await withTaskCancellationHandler {
+            await parsingTask.value
+        } onCancel: {
+            parsingTask.cancel()
+        }
+
+        guard let blocks = parsed, !Task.isCancelled else { return [] }
+        store(blocks: blocks, for: text)
+        return blocks
+    }
+
+    func inlineDocument(for content: String) -> AttributedString? {
+        if let cached = inlineCache.object(forKey: content as NSString) {
+            record { $0.inlineHits += 1 }
+            return cached.value
+        }
+
+        record { $0.inlineMisses += 1 }
+        let normalized = autoLinkURLs(sanitizeMarkdownLinkURLs(content))
+        let parsed = try? AttributedString(
+            markdown: normalized,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )
+        inlineCache.setObject(
+            InlineEntry(parsed),
+            forKey: content as NSString,
+            cost: inlineCost(content: content, parsed: parsed)
+        )
+        return parsed
+    }
+
+    func resetForTesting() {
+        semanticCache.removeAllObjects()
+        inlineCache.removeAllObjects()
+        statisticsLock.lock()
+        statisticsStorage = Statistics()
+        statisticsLock.unlock()
+    }
+
+    private func store(blocks: [MarkdownRenderBlock], for text: String) {
+        semanticCache.setObject(
+            SemanticEntry(blocks),
+            forKey: text as NSString,
+            cost: semanticCost(text: text, blocks: blocks)
+        )
+    }
+
+    private func prewarmInlineDocuments(in blocks: [MarkdownRenderBlock]) {
+        for (index, block) in blocks.enumerated() {
+            if index.isMultiple(of: 32), Task<Never, Never>.isCancelled { return }
+            switch block {
+            case .paragraph(let content), .heading(_, let content):
+                _ = inlineDocument(for: content)
+            case .unorderedList(let items):
+                items.forEach { _ = inlineDocument(for: $0) }
+            case .orderedList(let items):
+                items.forEach { _ = inlineDocument(for: $0.content) }
+            case .blockquote(let lines):
+                _ = inlineDocument(for: lines.joined(separator: "\n"))
+            case .table(let headers, let rows):
+                headers.forEach { _ = inlineDocument(for: $0) }
+                rows.lazy.joined().forEach { _ = inlineDocument(for: $0) }
+            case .codeBlock, .horizontalRule:
+                break
+            }
+        }
+    }
+
+    private func semanticCost(text: String, blocks: [MarkdownRenderBlock]) -> Int {
+        // NSString keys and block strings both retain the source. Three bytes
+        // per UTF-8 byte plus modest block overhead is a conservative estimate.
+        max(1, text.utf8.count * 3 + blocks.count * 96)
+    }
+
+    private func inlineCost(content: String, parsed: AttributedString?) -> Int {
+        let runCount = parsed.map { Array($0.runs).count } ?? 0
+        return max(1, content.utf8.count * 4 + runCount * 80)
+    }
+
+    private func record(_ update: (inout Statistics) -> Void) {
+        statisticsLock.lock()
+        update(&statisticsStorage)
+        statisticsLock.unlock()
     }
 }
 
 // MARK: - Semantic markdown model
 
-struct MarkdownOrderedListItem: Equatable {
+nonisolated struct MarkdownOrderedListItem: Equatable, Sendable {
     let number: Int
     let content: String
 }
 
-enum MarkdownRenderBlock: Equatable {
+nonisolated enum MarkdownRenderBlock: Equatable, Sendable {
     case paragraph(String)
     case heading(level: Int, content: String)
     case unorderedList([String])
@@ -108,8 +247,19 @@ enum MarkdownTypography {
     }
 }
 
-enum MarkdownDocumentParser {
+nonisolated enum MarkdownDocumentParser {
     static func parse(_ text: String) -> [MarkdownRenderBlock] {
+        parse(text, cancellationCheck: { false }) ?? []
+    }
+
+    static func parseCancellable(_ text: String) -> [MarkdownRenderBlock]? {
+        parse(text, cancellationCheck: { Task<Never, Never>.isCancelled })
+    }
+
+    private static func parse(
+        _ text: String,
+        cancellationCheck: () -> Bool
+    ) -> [MarkdownRenderBlock]? {
         let lines = text.components(separatedBy: "\n")
         var result: [MarkdownRenderBlock] = []
         var paragraphLines: [String] = []
@@ -150,6 +300,7 @@ enum MarkdownDocumentParser {
         }
 
         while index < lines.count {
+            if index.isMultiple(of: 128), cancellationCheck() { return nil }
             let line = lines[index]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
@@ -160,6 +311,7 @@ enum MarkdownDocumentParser {
                 var codeLines: [String] = []
                 index += 1
                 while index < lines.count, !lines[index].hasPrefix("```") {
+                    if index.isMultiple(of: 128), cancellationCheck() { return nil }
                     codeLines.append(lines[index])
                     index += 1
                 }
@@ -330,42 +482,55 @@ enum MarkdownDocumentParser {
 
 struct MarkdownContentView: View {
     let text: String
-    @State private var cachedBlocks: [MarkdownRenderBlock]
+    @State private var cachedBlocks: [MarkdownRenderBlock]?
     @State private var cachedText: String
 
     init(text: String) {
         self.text = text
-        let blocks: [MarkdownRenderBlock]
-        if let cached = MarkdownDocumentCache.shared.get(text) {
-            blocks = cached
+        let repository = MarkdownRenderRepository.shared
+        let blocks: [MarkdownRenderBlock]?
+        if text.utf8.count <= 4_096 {
+            // Small messages are cheaper to parse than to schedule and never
+            // show a transient raw-Markdown state.
+            blocks = repository.blocks(for: text)
         } else {
-            blocks = MarkdownDocumentParser.parse(text)
-            MarkdownDocumentCache.shared.set(text, blocks)
+            // Large responses are parsed and prewarmed off the main actor.
+            blocks = repository.cachedBlocks(for: text)
         }
         _cachedBlocks = State(initialValue: blocks)
-        _cachedText = State(initialValue: text)
+        _cachedText = State(initialValue: blocks == nil ? "" : text)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(cachedBlocks.enumerated()), id: \.offset) { index, block in
-                render(block)
-                    .padding(.top, MarkdownTypography.spacingBefore(
-                        block,
-                        previous: index > 0 ? cachedBlocks[index - 1] : nil
-                    ))
+        Group {
+            if cachedText == text, let cachedBlocks {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(cachedBlocks.enumerated()), id: \.offset) { index, block in
+                        render(block)
+                            .padding(.top, MarkdownTypography.spacingBefore(
+                                block,
+                                previous: index > 0 ? cachedBlocks[index - 1] : nil
+                            ))
+                    }
+                }
+            } else {
+                // Keep long uncached content readable while its pure semantic
+                // parse runs away from the main actor. The final and fallback
+                // paths deliberately share typography to minimize reflow.
+                Text(text)
+                    .font(.system(size: MarkdownTypography.bodyFontSize))
+                    .lineSpacing(MarkdownTypography.bodyLineSpacing)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .onChange(of: text) { _, newText in
-            guard newText != cachedText else { return }
-            cachedText = newText
-            if let cached = MarkdownDocumentCache.shared.get(newText) {
-                cachedBlocks = cached
-            } else {
-                let parsed = MarkdownDocumentParser.parse(newText)
-                MarkdownDocumentCache.shared.set(newText, parsed)
-                cachedBlocks = parsed
-            }
+        .task(id: text) {
+            guard cachedText != text || cachedBlocks == nil else { return }
+            let parsed = await MarkdownRenderRepository.shared.blocksAsync(for: text)
+            guard !Task.isCancelled else { return }
+            cachedBlocks = parsed
+            cachedText = text
         }
     }
 
@@ -375,7 +540,7 @@ struct MarkdownContentView: View {
         case .paragraph(let content):
             MarkdownTextView(content: content)
         case .heading(let level, let content):
-            Text(parseInlineMarkdown(
+            Text(renderInlineMarkdown(
                 content,
                 fontSize: MarkdownTypography.headingFontSize(level: level),
                 baseWeight: MarkdownTypography.headingWeight(level: level)
@@ -407,7 +572,7 @@ private struct MarkdownTextView: View {
     let content: String
 
     var body: some View {
-        Text(parseInlineMarkdown(
+        Text(renderInlineMarkdown(
             content,
             fontSize: MarkdownTypography.bodyFontSize
         ))
@@ -462,7 +627,7 @@ private struct BlockquoteView: View {
     let lines: [String]
 
     var body: some View {
-        Text(parseInlineMarkdown(
+        Text(renderInlineMarkdown(
             lines.joined(separator: "\n"),
             fontSize: MarkdownTypography.bodyFontSize
         ))
@@ -483,16 +648,12 @@ private struct BlockquoteView: View {
 
 // MARK: - Inline markdown
 
-private func parseInlineMarkdown(
+func renderInlineMarkdown(
     _ content: String,
     fontSize: CGFloat,
     baseWeight: Font.Weight = .regular
 ) -> AttributedString {
-    let autoLinked = autoLinkURLs(sanitizeMarkdownLinkURLs(content))
-    guard var result = try? AttributedString(
-        markdown: autoLinked,
-        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-    ) else {
+    guard var result = MarkdownRenderRepository.shared.inlineDocument(for: content) else {
         var fallback = AttributedString(content)
         fallback.font = .system(size: fontSize, weight: baseWeight)
         return fallback
@@ -535,10 +696,18 @@ private func parseInlineMarkdown(
     return result
 }
 
+nonisolated private enum MarkdownRegularExpressions {
+    static let malformedLink = try? NSRegularExpression(
+        pattern: #"\[([^\]]*)\]\(([^)]*\x60[^)]*)\)"#
+    )
+    static let bareURL = try? NSRegularExpression(
+        pattern: #"(?<!\]\()(?<!\()https?://[^\s\)<>\[\]\x60]+"#
+    )
+}
+
 /// Removes incorrectly included backticks from URLs inside markdown links.
-func sanitizeMarkdownLinkURLs(_ text: String) -> String {
-    let pattern = #"\[([^\]]*)\]\(([^)]*\x60[^)]*)\)"#
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+nonisolated func sanitizeMarkdownLinkURLs(_ text: String) -> String {
+    guard let regex = MarkdownRegularExpressions.malformedLink else { return text }
     let range = NSRange(text.startIndex..., in: text)
     var result = text
     for match in regex.matches(in: text, range: range).reversed() {
@@ -556,9 +725,8 @@ func sanitizeMarkdownLinkURLs(_ text: String) -> String {
 }
 
 /// Converts bare URLs not already inside a markdown link into link syntax.
-func autoLinkURLs(_ text: String) -> String {
-    let pattern = #"(?<!\]\()(?<!\()https?://[^\s\)<>\[\]\x60]+"#
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+nonisolated func autoLinkURLs(_ text: String) -> String {
+    guard let regex = MarkdownRegularExpressions.bareURL else { return text }
     let range = NSRange(text.startIndex..., in: text)
     var result = text
     for match in regex.matches(in: text, range: range).reversed() {
@@ -624,7 +792,7 @@ private struct MarkdownTableView: View {
         isHeader: Bool,
         column: Int
     ) -> some View {
-        Text(parseInlineMarkdown(
+        Text(renderInlineMarkdown(
             text,
             fontSize: ClaudeTheme.messageSize(13),
             baseWeight: isHeader ? .semibold : .regular
@@ -655,8 +823,15 @@ struct CodeBlockView: View {
     let language: String
     let code: String
     @State private var isCopied = false
+    @State private var highlightedCode: HighlightedCode?
 
     var body: some View {
+        let request = HighlightRequest(
+            code: code,
+            language: language,
+            fontSize: ClaudeTheme.messageSize(14)
+        )
+
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 if !language.isEmpty {
@@ -681,11 +856,19 @@ struct CodeBlockView: View {
                 .frame(height: 0.5)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(SyntaxHighlighter.highlight(
-                    code,
-                    language: language,
-                    fontSize: ClaudeTheme.messageSize(14)
-                ))
+                Group {
+                    if let highlightedCode, highlightedCode.request == request {
+                        Text(highlightedCode.value)
+                    } else {
+                        Text(code)
+                            .font(.system(
+                                size: request.fontSize,
+                                weight: .regular,
+                                design: .monospaced
+                            ))
+                            .foregroundStyle(ClaudeTheme.textPrimary)
+                    }
+                }
                 .textSelection(.enabled)
                 .fixedSize()
                 .padding(12)
@@ -698,6 +881,14 @@ struct CodeBlockView: View {
             RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
                 .strokeBorder(ClaudeTheme.border, lineWidth: 0.5)
         )
+        .task(id: request) {
+            guard let rendered = await SyntaxHighlighter.highlightAsync(
+                request.code,
+                language: request.language,
+                fontSize: request.fontSize
+            ), !Task.isCancelled else { return }
+            highlightedCode = HighlightedCode(request: request, value: rendered)
+        }
     }
 
     private var copyButton: some View {
@@ -718,6 +909,17 @@ struct CodeBlockView: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct HighlightRequest: Hashable, Sendable {
+    let code: String
+    let language: String
+    let fontSize: CGFloat
+}
+
+private struct HighlightedCode: Sendable {
+    let request: HighlightRequest
+    let value: AttributedString
 }
 
 private extension String {

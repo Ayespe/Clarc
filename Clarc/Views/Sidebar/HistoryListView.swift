@@ -144,9 +144,16 @@ struct HistoryListView: View {
     @ViewBuilder
     private func rowBackground(for session: DisplaySession) -> some View {
         if selection.contains(session.id) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(ClaudeTheme.sidebarItemSelected)
-                .padding(.horizontal, 8)
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(ClaudeTheme.sidebarItemSelected)
+                Capsule()
+                    .fill(ClaudeTheme.accent)
+                    .frame(width: 2.5)
+                    .padding(.vertical, 7)
+                    .padding(.leading, 4)
+            }
+            .padding(.horizontal, 7)
         }
     }
 

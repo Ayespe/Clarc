@@ -34,6 +34,7 @@ public struct ShortcutManagerView: View {
                 shortcutListView
             }
         }
+        .clarcWindowCanvas()
         .focusable(false)
         .sheet(item: $editingShortcut) { shortcut in
             ShortcutEditView(
@@ -177,7 +178,7 @@ public struct ShortcutManagerView: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color(NSColor.controlBackgroundColor), in: Capsule())
+                                .clarcGlassSurface(.control, cornerRadius: 999)
                         }
                     }
 
@@ -330,9 +331,7 @@ struct ShortcutEditView: View {
                             .font(.system(size: ClaudeTheme.size(14)))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(NSColor.separatorColor).opacity(0.6), lineWidth: 1))
+                            .clarcGlassSurface(.control, cornerRadius: 10)
                     }
 
                     // Message
@@ -342,9 +341,7 @@ struct ShortcutEditView: View {
                             .scrollContentBackground(.hidden)
                             .frame(minHeight: 80, maxHeight: 150)
                             .padding(8)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(NSColor.separatorColor).opacity(0.6), lineWidth: 1))
+                            .clarcGlassSurface(.control, cornerRadius: 10)
                         Group {
                             if isTerminalCommand {
                                 Text("This command will run in the terminal when the button is clicked", bundle: .module)
@@ -404,6 +401,7 @@ struct ShortcutEditView: View {
             .padding(.vertical, 12)
         }
         .frame(width: 480, height: 520)
+        .clarcGlassSurface(.popover, cornerRadius: 18)
         .focusable(false)
         .onAppear {
             if let s = shortcut {

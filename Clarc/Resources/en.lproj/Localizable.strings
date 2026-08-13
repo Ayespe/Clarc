@@ -558,3 +558,16 @@
 "Show an alert when input is required to continue." = "Show an alert when input is required to continue.";
 "The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "The Dock icon bounces once when an enabled alert arrives while Clarc is inactive.";
 "Input required to continue" = "Input required to continue";
+
+// Appearance
+"Appearance" = "Appearance";
+"Follow System" = "Follow System";
+"Light" = "Light";
+"Dark" = "Dark";
+"Use the Mac appearance setting." = "Use the Mac appearance setting.";
+"Always use light appearance." = "Always use light appearance.";
+"Always use dark appearance." = "Always use dark appearance.";
+"Settings & Appearance" = "Settings & Appearance";
+"Color & Appearance" = "Color & Appearance";
+"Follow the Mac appearance setting, or always use light or dark appearance" = "Follow the Mac appearance setting, or always use light or dark appearance";
+"Clarc uses one warm Claude-inspired palette. Choose whether Clarc follows macOS or stays in light or dark appearance." = "Clarc uses one warm Claude-inspired palette. Choose whether Clarc follows macOS or stays in light or dark appearance.";

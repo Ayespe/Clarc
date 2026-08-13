@@ -67,16 +67,9 @@ struct ThinkingBlockView: View {
                 thinkingBody
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                .fill(ClaudeTheme.surfacePrimary.opacity(0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                .strokeBorder(ClaudeTheme.border, lineWidth: 0.5)
-        )
+        .clarcGlassSurface(.message, cornerRadius: ClaudeTheme.cornerRadiusSmall)
         .onHover { isHovering = $0 }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isExpanded)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isExpanded)
     }
 
     private var header: some View {
@@ -85,7 +78,7 @@ struct ThinkingBlockView: View {
             if reduceMotion {
                 toggle()
             } else {
-                withAnimation(.easeInOut(duration: 0.2), toggle)
+                withAnimation(.easeOut(duration: 0.16), toggle)
             }
         } label: {
             HStack(spacing: 6) {

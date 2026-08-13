@@ -25,7 +25,7 @@ struct ProjectWindowView: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(ClaudeTheme.background)
+                    .clarcWindowCanvas()
             }
         }
         .onAppear {
@@ -75,7 +75,7 @@ struct ProjectWindowView: View {
                     .zIndex(20)
             }
         }
-        .id(appState.themeRevision)
+        .clarcWindowCanvas()
         .navigationTitle(windowState.selectedProject?.name ?? "Project")
         .onChange(of: windowState.showInspector) { _, isShowing in
             if isShowing, !inspectorStarted { inspectorStarted = true }
@@ -124,7 +124,7 @@ struct ProjectWindowView: View {
                 GitStatusView(projectPath: project.path)
             }
         }
-        .background(ClaudeTheme.sidebarBackground)
+        .clarcGlassSurface(.sidebar, cornerRadius: 0)
         .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 360)
     }
 
@@ -165,7 +165,7 @@ struct ProjectWindowView: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(ClaudeTheme.background)
+                    .clarcWindowCanvas()
             }
         }
         .toolbar {

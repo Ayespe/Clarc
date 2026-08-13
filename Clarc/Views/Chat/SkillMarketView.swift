@@ -21,6 +21,7 @@ struct SkillMarketView: View {
             } else {
                 marketplaceContent
                     .frame(width: 860, height: 720)
+                    .clarcGlassSurface(.popover, cornerRadius: 20)
             }
         }
         .task {
@@ -105,12 +106,7 @@ struct SkillMarketView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color(NSColor.textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
-            )
+            .clarcGlassSurface(.control, cornerRadius: 10)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -133,11 +129,10 @@ struct SkillMarketView: View {
         } label: {
             Text(LocalizedStringKey(label))
                 .font(.system(size: ClaudeTheme.size(11), weight: selectedFilter == label ? .semibold : .regular))
-                .foregroundStyle(selectedFilter == label ? Color.white : Color.secondary)
+                .foregroundStyle(selectedFilter == label ? ClaudeTheme.textPrimary : ClaudeTheme.textSecondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(selectedFilter == label ? Color.accentColor : Color(NSColor.controlBackgroundColor))
-                .clipShape(Capsule())
+                .clarcGlassSurface(selectedFilter == label ? .selection : .control, cornerRadius: 999)
         }
         .buttonStyle(.plain)
     }
@@ -247,8 +242,7 @@ struct PluginCard: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(Capsule())
+                    .clarcGlassSurface(.control, cornerRadius: 999)
 
                 Spacer()
             }
@@ -278,11 +272,10 @@ struct PluginCard: View {
             }
         }
         .padding(14)
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clarcGlassSurface(isHovering ? .selection : .control, cornerRadius: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color(NSColor.separatorColor).opacity(isHovering ? 0.8 : 0.5), lineWidth: 1)
+                .strokeBorder(ClaudeTheme.accent.opacity(isHovering ? 0.24 : 0), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
@@ -392,8 +385,7 @@ struct PluginDetailView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .clipShape(Capsule())
+                            .clarcGlassSurface(.control, cornerRadius: 999)
                     }
 
                     // Name
@@ -430,14 +422,14 @@ struct PluginDetailView: View {
                             .foregroundStyle(.secondary)
                             .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clarcGlassSurface(.control, cornerRadius: 10)
                     }
                 }
                 .padding(24)
             }
         }
         .frame(width: 620, height: 500)
+        .clarcWindowCanvas()
         .sheet(item: $terminalState) { terminal in
             InteractiveTerminalPopup(state: terminal)
                 .onDisappear {

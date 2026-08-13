@@ -37,6 +37,7 @@ struct SettingsView: View {
                 .tag(3)
         }
         .frame(width: 680, height: 620)
+        .clarcWindowCanvas()
         .focusable(false)
         .onAppear { selectedTab = 0 }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
@@ -56,13 +57,12 @@ struct GeneralSettingsTab: View {
     @Environment(AppState.self) private var appState
     @Binding var showUserManual: Bool
     @State private var showSkillMarket = false
-    @State private var showThemePicker = false
 
     var body: some View {
         @Bindable var appState = appState
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                themeSection
+                appearanceSection
                 Divider()
                 fontSizeSection
                 Divider()
@@ -165,9 +165,7 @@ struct GeneralSettingsTab: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .frame(width: 26, height: 26)
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color(NSColor.separatorColor), lineWidth: 1))
+                .clarcGlassSurface(.control, cornerRadius: 7)
         }
         .buttonStyle(.plain)
     }
@@ -257,56 +255,27 @@ struct GeneralSettingsTab: View {
         }
     }
 
-    // MARK: - Theme Section
+    // MARK: - Appearance Section
 
-    private var themeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Theme")
+    private var appearanceSection: some View {
+        @Bindable var appState = appState
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Appearance")
                 .font(.system(size: ClaudeTheme.size(13), weight: .semibold))
 
-            Button {
-                showThemePicker.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(appState.selectedTheme.colors.accent)
-                        .frame(width: 10, height: 10)
-                    Text(appState.selectedTheme.displayName)
-                        .font(.system(size: ClaudeTheme.size(13)))
-                        .foregroundStyle(.primary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: ClaudeTheme.size(10)))
-                        .foregroundStyle(.secondary)
+            Picker("Appearance", selection: $appState.appearanceMode) {
+                ForEach(AppearanceMode.allCases) { mode in
+                    Text(mode.displayName)
+                        .tag(mode)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showThemePicker, arrowEdge: .bottom) {
-                VStack(spacing: 0) {
-                    ForEach(AppTheme.allCases) { theme in
-                        ThemePickerRow(
-                            theme: theme,
-                            isSelected: appState.selectedTheme == theme
-                        ) {
-                            appState.selectedTheme = theme
-                            showThemePicker = false
-                        }
-                    }
-                }
-                .padding(4)
-                .frame(minWidth: 220)
-                .focusable(false)
-            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 340)
+
+            Text(appState.appearanceMode.detail)
+                .font(.system(size: ClaudeTheme.size(11)))
+                .foregroundStyle(ClaudeTheme.textSecondary)
         }
     }
 
@@ -335,12 +304,7 @@ struct GeneralSettingsTab: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
-            )
+            .clarcGlassSurface(.control, cornerRadius: 10)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showSkillMarket) {
@@ -371,12 +335,7 @@ struct GeneralSettingsTab: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
-            )
+            .clarcGlassSurface(.control, cornerRadius: 10)
         }
         .buttonStyle(.plain)
     }
@@ -401,12 +360,7 @@ struct GeneralSettingsTab: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
-            )
+            .clarcGlassSurface(.control, cornerRadius: 10)
         }
         .buttonStyle(.plain)
     }
@@ -591,43 +545,6 @@ struct ChatSettingsTab: View {
         case "max":    return "Max"
         default:       return effort.capitalized
         }
-    }
-}
-
-// MARK: - Theme Picker Row
-
-private struct ThemePickerRow: View {
-    let theme: AppTheme
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(theme.colors.accent)
-                    .frame(width: 10, height: 10)
-                Text(theme.displayName)
-                    .font(.system(size: ClaudeTheme.size(13)))
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: ClaudeTheme.size(11), weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isHovering ? Color(NSColor.selectedContentBackgroundColor).opacity(0.5) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
     }
 }
 

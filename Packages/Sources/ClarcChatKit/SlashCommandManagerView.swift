@@ -46,6 +46,7 @@ public struct SlashCommandManagerView: View {
                 commandListView
             }
         }
+        .clarcWindowCanvas()
         .focusable(false)
         .sheet(item: $editingCommand) { cmd in
             SlashCommandEditView(
@@ -202,12 +203,7 @@ public struct SlashCommandManagerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(NSColor.textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
-        )
+        .clarcGlassSurface(.control, cornerRadius: 10)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
     }
@@ -261,7 +257,7 @@ public struct SlashCommandManagerView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(Color(NSColor.controlBackgroundColor), in: Capsule())
+                            .clarcGlassSurface(.control, cornerRadius: 999)
                     }
 
                     if cmd.acceptsInput {
@@ -270,7 +266,7 @@ public struct SlashCommandManagerView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(Color(NSColor.controlBackgroundColor), in: Capsule())
+                            .clarcGlassSurface(.control, cornerRadius: 999)
                     }
 
                     if cmd.isInteractive {
@@ -472,9 +468,7 @@ struct SlashCommandEditView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(isDefault ? Color(NSColor.controlBackgroundColor) : Color(NSColor.textBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(NSColor.separatorColor).opacity(0.6), lineWidth: 1))
+                        .clarcGlassSurface(.control, cornerRadius: 10)
 
                         if hasNameConflict {
                             Text("A command with this name already exists.", bundle: .module)
@@ -490,9 +484,7 @@ struct SlashCommandEditView: View {
                             .font(.system(size: ClaudeTheme.size(14)))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(NSColor.separatorColor).opacity(0.6), lineWidth: 1))
+                            .clarcGlassSurface(.control, cornerRadius: 10)
                     }
 
                     // Detail description
@@ -502,9 +494,7 @@ struct SlashCommandEditView: View {
                             .scrollContentBackground(.hidden)
                             .frame(minHeight: 80, maxHeight: 150)
                             .padding(8)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(NSColor.separatorColor).opacity(0.6), lineWidth: 1))
+                            .clarcGlassSurface(.control, cornerRadius: 10)
                     }
 
                     // Option toggles
@@ -596,6 +586,7 @@ struct SlashCommandEditView: View {
             .padding(.vertical, 12)
         }
         .frame(width: 520, height: 520)
+        .clarcGlassSurface(.popover, cornerRadius: 18)
         .focusable(false)
         .onAppear {
             if let cmd = command {

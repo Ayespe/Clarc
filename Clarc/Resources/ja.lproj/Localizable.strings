@@ -578,3 +578,16 @@
 "Show an alert when input is required to continue." = "続行に入力が必要なときに通知します。";
 "The Dock icon bounces once when an enabled alert arrives while Clarc is inactive." = "Clarc が非アクティブのとき、有効な通知で Dock アイコンが一度バウンドします。";
 "Input required to continue" = "続行するには入力が必要です";
+
+// 外観
+"Appearance" = "外観";
+"Follow System" = "システムに合わせる";
+"Light" = "ライト";
+"Dark" = "ダーク";
+"Use the Mac appearance setting." = "Mac の外観設定を使用します。";
+"Always use light appearance." = "常にライト表示を使用します。";
+"Always use dark appearance." = "常にダーク表示を使用します。";
+"Settings & Appearance" = "設定と外観";
+"Color & Appearance" = "カラーと外観";
+"Follow the Mac appearance setting, or always use light or dark appearance" = "Mac の外観設定に合わせるか、ライトまたはダーク表示に固定します";
+"Clarc uses one warm Claude-inspired palette. Choose whether Clarc follows macOS or stays in light or dark appearance." = "Clarc は Claude を思わせる暖色系パレットを使用します。macOS に合わせるか、ライトまたはダーク表示に固定できます。";

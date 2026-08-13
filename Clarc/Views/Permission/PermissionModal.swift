@@ -23,7 +23,7 @@ struct PermissionModal: View {
         }
         .padding(24)
         .frame(width: 480, height: 380)
-        .background(ClaudeTheme.surfaceElevated)
+        .background(Color.clear)
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()

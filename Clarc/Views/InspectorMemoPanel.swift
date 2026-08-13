@@ -91,7 +91,7 @@ struct InspectorMemoPanel: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             MemoFormattingToolbar(context: memoContext, onClear: onClear)
         }
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
     }
 }
 
@@ -123,7 +123,7 @@ private struct MemoFormattingToolbar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(ClaudeTheme.background)
+        .clarcGlassSurface(.inspector, cornerRadius: 0)
         .overlay(alignment: .top) { Divider().opacity(0.5) }
     }
 

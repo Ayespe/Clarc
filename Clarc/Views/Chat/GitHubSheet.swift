@@ -58,7 +58,7 @@ struct GitHubSheet: View {
             }
         }
         .frame(width: 480, height: 520)
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
         .focusable(false)
         .task {
             if appState.isLoggedIn, appState.repos.isEmpty {
@@ -110,7 +110,7 @@ struct GitHubSheet: View {
                     .foregroundStyle(ClaudeTheme.textPrimary)
             }
             .padding(8)
-            .background(ClaudeTheme.surfaceSecondary, in: RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
+            .clarcGlassSurface(.control, cornerRadius: ClaudeTheme.cornerRadiusSmall)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 

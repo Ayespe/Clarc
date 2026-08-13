@@ -64,12 +64,8 @@ struct MessageBubble: View {
     @State private var isEditing = false
     @State private var editText = ""
     @FocusState private var isEditFocused: Bool
-    @State private var isLongTextExpanded = false
     @State private var hoveredBlockId: String? = nil
     @State private var isHoveringUserBubble = false
-
-    /// Threshold (character count) for collapsing long text
-    private static let longTextThreshold = 500
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -141,7 +137,9 @@ struct MessageBubble: View {
                 }
             }
             .frame(
-                maxWidth: message.role == .assistant ? 880 : 620,
+                maxWidth: message.role == .assistant
+                    ? ChatLayout.readingMaxWidth
+                    : ChatLayout.userBubbleMaxWidth,
                 alignment: message.role == .user ? .trailing : .leading
             )
 
@@ -165,14 +163,7 @@ struct MessageBubble: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .padding(.horizontal, 14)
-        .background(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                .fill(ClaudeTheme.surfacePrimary)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall)
-                .strokeBorder(ClaudeTheme.border, lineWidth: BubbleStyle.borderWidth)
-        )
+        .clarcGlassSurface(.message, cornerRadius: ClaudeTheme.cornerRadiusSmall)
     }
 
     // MARK: - Error Bubble
@@ -236,28 +227,11 @@ struct MessageBubble: View {
             }
         } else {
             VStack(alignment: .trailing, spacing: 6) {
-                let isLong = message.content.count > Self.longTextThreshold
                 Text(message.content)
                     .font(.system(size: ClaudeTheme.messageSize(14)))
                     .foregroundStyle(ClaudeTheme.userBubbleText)
+                    .lineSpacing(3)
                     .textSelection(.enabled)
-                    .lineLimit(isLong && !isLongTextExpanded ? 5 : nil)
-                if isLong {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isLongTextExpanded.toggle()
-                        }
-                    } label: {
-                        if isLongTextExpanded {
-                            Text("Collapse", bundle: .module)
-                        } else {
-                            Text("Show more", bundle: .module)
-                        }
-                    }
-                    .font(.system(size: ClaudeTheme.messageSize(12), weight: .medium))
-                    .foregroundStyle(ClaudeTheme.accent)
-                    .buttonStyle(.plain)
-                }
             }
             .bubbleStyle(.user)
             .overlay(alignment: .bottomTrailing) {
@@ -533,12 +507,8 @@ struct MessageBubble: View {
         HStack(spacing: 6) {
             ForEach(message.attachmentPaths, id: \.path) { info in
                 HStack(spacing: 4) {
-                    if info.isImage, let nsImage = NSImage(contentsOfFile: info.path) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 40, height: 40)
-                            .clipShape(RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusSmall))
+                    if info.isImage {
+                        AsyncAttachmentThumbnail(path: info.path)
                     } else {
                         Image(systemName: info.isImage ? "photo" : "doc")
                             .font(.system(size: ClaudeTheme.messageSize(14)))

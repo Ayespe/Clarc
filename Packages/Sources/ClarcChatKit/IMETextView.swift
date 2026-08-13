@@ -8,6 +8,7 @@ struct IMETextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var hasMarkedText: Bool
+    @Binding var measuredContentHeight: CGFloat
     /// Bumping this UUID asks the view to take first responder. Plain SwiftUI re-renders
     /// must NOT steal focus — that races with text-selection NSTextView in message bubbles.
     var focusTrigger: UUID?
@@ -105,6 +106,17 @@ struct IMETextView: NSViewRepresentable {
                 isFocused = focused
             }
         }
+        textView.onContentHeightChange = { height in
+            guard abs(measuredContentHeight - height) > 0.5 else { return }
+            // NSTextView can report from inside its layout pass. Deferring the
+            // binding write avoids recursively invalidating the hosting layout.
+            DispatchQueue.main.async {
+                if abs(measuredContentHeight - height) > 0.5 {
+                    measuredContentHeight = height
+                }
+            }
+        }
+        textView.reportContentHeightIfNeeded()
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -140,6 +152,28 @@ fileprivate final class _IMETextView: NSTextView {
     var onPasteCommandV: () -> Bool = { false }
     var onMarkedTextChange: (Bool) -> Void = { _ in }
     var onFocusChange: (Bool) -> Void = { _ in }
+    var onContentHeightChange: (CGFloat) -> Void = { _ in }
+    private var lastReportedContentHeight: CGFloat = 0
+
+    override func layout() {
+        super.layout()
+        reportContentHeightIfNeeded()
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        reportContentHeightIfNeeded()
+    }
+
+    func reportContentHeightIfNeeded() {
+        guard let layoutManager, let textContainer else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        let usedHeight = layoutManager.usedRect(for: textContainer).height
+        let height = ceil(max(font?.ascender ?? 14, usedHeight) + textContainerInset.height * 2)
+        guard abs(lastReportedContentHeight - height) > 0.5 else { return }
+        lastReportedContentHeight = height
+        onContentHeightChange(height)
+    }
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()

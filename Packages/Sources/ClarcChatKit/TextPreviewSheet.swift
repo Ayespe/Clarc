@@ -55,9 +55,9 @@ struct TextPreviewSheet: View {
                         .padding(16)
                 }
             }
-            .background(ClaudeTheme.background)
+            .clarcWindowCanvas()
         }
         .frame(width: 600, height: 450)
-        .background(ClaudeTheme.surfaceElevated)
+        .clarcGlassSurface(.popover, cornerRadius: ClaudeTheme.cornerRadiusLarge)
     }
 }

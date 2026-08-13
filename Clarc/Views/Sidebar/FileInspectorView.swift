@@ -43,7 +43,7 @@ struct FileInspectorView: View {
                 }
             }
         }
-        .background(ClaudeTheme.background)
+        .clarcWindowCanvas()
         .background {
             // Cmd+S: Save
             Button("") { Task { await saveFile() } }
@@ -136,7 +136,7 @@ struct FileInspectorView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(ClaudeTheme.surfacePrimary)
+        .clarcGlassSurface(.inspector, cornerRadius: 0)
     }
 
     // MARK: - Content
