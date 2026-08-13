@@ -267,7 +267,8 @@ private struct ConversationOutlineRail: View {
             }
             .padding(.vertical, 10)
         }
-        .frame(width: 28, maxHeight: 360, alignment: .leading)
+        .frame(width: 28, alignment: .leading)
+        .frame(maxHeight: 360, alignment: .leading)
         .contentShape(Rectangle())
     }
 
@@ -308,7 +309,8 @@ private struct ConversationOutlineRail: View {
                 .padding(.bottom, 6)
             }
         }
-        .frame(width: 350, maxHeight: 430)
+        .frame(width: 350)
+        .frame(maxHeight: 430)
         .background(
             RoundedRectangle(cornerRadius: ClaudeTheme.cornerRadiusMedium)
                 .fill(ClaudeTheme.surfaceElevated)
