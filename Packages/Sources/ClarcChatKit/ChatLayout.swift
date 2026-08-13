@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// Keeping these values in one place prevents the composer, settled messages,
 /// streaming response and outline from drifting onto different horizontal axes.
-enum ChatLayout {
+nonisolated enum ChatLayout {
     static let composerMaxWidth: CGFloat = 730
     static let readingMaxWidth: CGFloat = 730
     static let semanticMaxWidth: CGFloat = 780

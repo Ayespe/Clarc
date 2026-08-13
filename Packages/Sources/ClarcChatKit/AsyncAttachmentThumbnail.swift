@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClarcCore
 
 @MainActor
 private final class AttachmentThumbnailCache {

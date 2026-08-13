@@ -923,7 +923,7 @@ private struct HighlightedCode: Sendable {
 }
 
 private extension String {
-    func trimmingTrailingNewlines() -> String {
+    nonisolated func trimmingTrailingNewlines() -> String {
         var result = self
         while result.hasSuffix("\n") {
             result.removeLast()
